@@ -31,6 +31,9 @@ RUN apt-get update \
       tini \
     && rm -rf /var/lib/apt/lists/*
 
+RUN npm install -g npm@latest \
+    && npm cache clean --force
+
 RUN userdel -r node 2>/dev/null || true \
     && useradd --create-home --home-dir /home/t3 --shell /bin/bash --uid 1000 t3 \
     && mkdir -p /data /config /workspace /opt/t3-docker \

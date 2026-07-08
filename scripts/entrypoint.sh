@@ -25,13 +25,28 @@ install_npm_latest() {
   local enabled="$1"
   local package_name="$2"
   local label="$3"
+  local binary_name="${4:-}"
 
   if [[ "$enabled" != "1" ]]; then
     return 0
   fi
 
   echo "Updating $label package: $package_name@latest"
-  npm install -g --no-audit --no-fund "${package_name}@latest"
+  if npm install -g --no-audit --no-fund "${package_name}@latest"; then
+    return 0
+  fi
+
+  echo "Warning: failed to update $label package. Falling back to bundled image version if available." >&2
+  if [[ -n "$binary_name" ]]; then
+    npm uninstall -g "$package_name" >/dev/null 2>&1 || true
+    if command -v "$binary_name" >/dev/null 2>&1; then
+      echo "Continuing with bundled $label at $(command -v "$binary_name")"
+      return 0
+    fi
+  fi
+
+  echo "No usable bundled $label binary found after failed update." >&2
+  return 1
 }
 
 install_cursor_latest() {
@@ -65,6 +80,7 @@ start_managed_opencode_server() {
   local host="${T3_OPENCODE_MANAGED_HOST:-127.0.0.1}"
   local port="${T3_OPENCODE_MANAGED_PORT:-4096}"
   local config="${T3_OPENCODE_CONFIG:-}"
+  local ready_url="${T3_OPENCODE_READY_URL:-http://${host}:${port}/}"
   local -a server_env=(env)
 
   if [[ -n "$config" ]]; then
@@ -75,28 +91,28 @@ start_managed_opencode_server() {
   "${server_env[@]}" opencode serve "--hostname=${host}" "--port=${port}" &
   local opencode_pid="$!"
 
-  for _ in $(seq 1 50); do
+  for _ in $(seq 1 30); do
     if ! kill -0 "$opencode_pid" 2>/dev/null; then
       echo "Managed OpenCode server exited before becoming ready." >&2
       wait "$opencode_pid" || true
       exit 1
     fi
 
-    if curl -fsS "http://${host}:${port}/" >/dev/null 2>&1; then
+    if curl --connect-timeout 1 --max-time 2 -fsS "$ready_url" >/dev/null 2>&1; then
       return 0
     fi
 
-    sleep 0.2
+    sleep 0.5
   done
 
   echo "Managed OpenCode server did not answer readiness probe; T3 will still try http://${host}:${port}." >&2
 }
 
 if [[ "${T3_AUTO_UPDATE_EFFECTIVE:-1}" == "1" ]]; then
-  install_npm_latest "${T3_UPDATE_T3:-1}" "t3" "T3 Code"
-  install_npm_latest "${T3_UPDATE_CODEX:-0}" "@openai/codex" "Codex CLI"
-  install_npm_latest "${T3_UPDATE_CLAUDE:-0}" "@anthropic-ai/claude-code" "Claude Code"
-  install_npm_latest "${T3_UPDATE_OPENCODE:-0}" "opencode-ai" "OpenCode"
+  install_npm_latest "${T3_UPDATE_T3:-1}" "t3" "T3 Code" "t3"
+  install_npm_latest "${T3_UPDATE_CODEX:-0}" "@openai/codex" "Codex CLI" "codex"
+  install_npm_latest "${T3_UPDATE_CLAUDE:-0}" "@anthropic-ai/claude-code" "Claude Code" "claude"
+  install_npm_latest "${T3_UPDATE_OPENCODE:-0}" "opencode-ai" "OpenCode" "opencode"
   install_cursor_latest "${T3_UPDATE_CURSOR:-0}"
   install_grok_latest "${T3_UPDATE_GROK:-0}"
 else

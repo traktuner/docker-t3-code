@@ -1,0 +1,9 @@
+.git
+.DS_Store
+data
+workspace
+config/t3code.toml
+.env
+*.log
+node_modules
+

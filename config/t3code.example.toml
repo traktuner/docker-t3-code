@@ -1,0 +1,114 @@
+# Copy to config/t3code.toml and adjust. Secrets can stay in .env instead.
+
+[server]
+host = "0.0.0.0"
+port = 3773
+workdir = "/workspace"
+t3_home = "/data/t3"
+no_browser = true
+auto_bootstrap_project_from_cwd = true
+
+[updates]
+# Keep T3 itself current on each container start. Provider CLIs are baked into
+# the image and are not updated at runtime unless explicitly enabled here.
+on_start = true
+t3 = true
+codex = false
+claude = false
+cursor = false
+grok = false
+opencode = false
+install_disabled_providers = false
+provider_update_checks = false
+
+[providers.codex]
+enabled = true
+binary_path = "codex"
+home_path = "/data/codex"
+shadow_home_path = ""
+
+[[providers.codex.env]]
+name = "OPENAI_API_KEY"
+from_env = "OPENAI_API_KEY"
+sensitive = true
+
+[[providers.codex.env]]
+name = "OPENAI_BASE_URL"
+from_env = "OPENAI_BASE_URL"
+
+[providers.claude]
+enabled = true
+binary_path = "claude"
+home_path = "/data/claude-home"
+launch_args = ""
+
+[[providers.claude.env]]
+name = "ANTHROPIC_API_KEY"
+from_env = "ANTHROPIC_API_KEY"
+sensitive = true
+
+[[providers.claude.env]]
+name = "ANTHROPIC_BASE_URL"
+from_env = "ANTHROPIC_BASE_URL"
+
+[providers.cursor]
+enabled = true
+binary_path = "agent"
+api_endpoint = ""
+
+[providers.grok]
+enabled = true
+binary_path = "grok"
+
+[[providers.grok.env]]
+name = "GROK_DEPLOYMENT_KEY"
+from_env = "GROK_DEPLOYMENT_KEY"
+sensitive = true
+
+[[providers.grok.env]]
+name = "GROK_PROXY_URL"
+from_env = "GROK_PROXY_URL"
+
+[[providers.grok.env]]
+name = "GROK_CHANNEL"
+from_env = "GROK_CHANNEL"
+
+[providers.opencode]
+enabled = true
+binary_path = "opencode"
+# Set managed_server=true plus config_source for providers such as Lumo that
+# need an OpenCode config file. T3 will then talk to this local server instead
+# of spawning opencode itself.
+managed_server = false
+managed_host = "127.0.0.1"
+managed_port = 4096
+config_source = ""
+config_path = "/data/home/.config/opencode/opencode.json"
+default_model = "openai/gpt-5"
+server_url = ""
+server_password = ""
+
+[[providers.opencode.env]]
+name = "OPENCODE_API_KEY"
+from_env = "OPENCODE_API_KEY"
+sensitive = true
+
+[[providers.opencode.env]]
+name = "LUMO_API_KEY"
+from_env = "LUMO_API_KEY"
+sensitive = true
+
+[[providers.opencode.env]]
+name = "OPENAI_API_KEY"
+from_env = "OPENAI_API_KEY"
+sensitive = true
+
+[[providers.opencode.env]]
+name = "ANTHROPIC_API_KEY"
+from_env = "ANTHROPIC_API_KEY"
+sensitive = true
+
+[[providers.opencode.env]]
+name = "OPENROUTER_API_KEY"
+from_env = "OPENROUTER_API_KEY"
+sensitive = true

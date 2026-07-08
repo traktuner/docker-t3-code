@@ -31,7 +31,8 @@ RUN apt-get update \
       tini \
     && rm -rf /var/lib/apt/lists/*
 
-RUN useradd --create-home --home-dir /home/t3 --shell /bin/bash --uid 1000 t3 \
+RUN userdel -r node 2>/dev/null || true \
+    && useradd --create-home --home-dir /home/t3 --shell /bin/bash --uid 1000 t3 \
     && mkdir -p /data /config /workspace /opt/t3-docker \
     && ln -s /usr/bin/fdfind /usr/local/bin/fd \
     && chown -R t3:t3 /data /config /workspace /opt/t3-docker

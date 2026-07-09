@@ -9,8 +9,9 @@ Usage:
   t3-auth codex api-key        # persist OPENAI_API_KEY, API-billed
   t3-auth codex status
 
-  t3-auth claude login         # open Claude Code; run /login for subscription auth
+  t3-auth claude login         # Claude subscription auth
   t3-auth claude setup-token   # generate CLAUDE_CODE_OAUTH_TOKEN for Proton Pass
+  t3-auth claude status
   t3-auth claude env           # report env-based Claude auth presence
 
   t3-auth grok login           # xAI/Grok included usage via device auth
@@ -60,11 +61,13 @@ case "$provider" in
     mkdir -p "$HOME"
     case "$action" in
       login)
-        echo "Claude Code opens interactively. Use /login for subscription auth."
-        exec claude
+        exec claude auth login
         ;;
       setup-token)
         exec claude setup-token
+        ;;
+      status)
+        exec claude auth status
         ;;
       env)
         if [[ -n "${CLAUDE_CODE_OAUTH_TOKEN:-}" ]]; then

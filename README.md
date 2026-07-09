@@ -81,13 +81,13 @@ With this mode, T3 listens only on the internal host/port and the proxy listens 
 For your AGENTS.md, CLAUDE.md, Skill files, watchdogs, and repo-local prompt material, prefer setting:
 
 ```bash
-T3_WORKSPACE_HOST=/Users/thomas/Developer
+T3_WORKSPACE_HOST=/path/to/developer
 ```
 
 That exposes the whole developer tree at `/workspace` while provider state stays under `/data`.
 
-For a TrueNAS/NFS workspace that is writable through a share group, keep the
-share ACLs on the NAS and set the supplemental group only:
+For a network-backed workspace that is writable through a share group, keep the
+share ACLs on the storage server and set the supplemental group only:
 
 ```bash
 T3_WORKSPACE_GID=3001

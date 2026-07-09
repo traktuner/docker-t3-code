@@ -36,6 +36,9 @@ enabled = true
 binary_path = "codex"
 home_path = "/data/codex"
 shadow_home_path = ""
+config_dir_source = ""
+hidden_models = []
+model_order = []
 
 [[providers.codex.env]]
 name = "OPENAI_API_KEY"
@@ -51,6 +54,9 @@ enabled = true
 binary_path = "claude"
 home_path = "/data/claude-home"
 launch_args = ""
+config_dir_source = ""
+hidden_models = []
+model_order = []
 
 [[providers.claude.env]]
 name = "ANTHROPIC_API_KEY"
@@ -65,10 +71,16 @@ from_env = "ANTHROPIC_BASE_URL"
 enabled = true
 binary_path = "agent"
 api_endpoint = ""
+hidden_models = []
+model_order = []
 
 [providers.grok]
 enabled = true
 binary_path = "grok"
+config_dir = "/data/home/.grok"
+config_dir_source = ""
+hidden_models = []
+model_order = []
 
 [[providers.grok.env]]
 name = "GROK_DEPLOYMENT_KEY"
@@ -92,11 +104,14 @@ binary_path = "opencode"
 managed_server = false
 managed_host = "127.0.0.1"
 managed_port = 4096
+config_dir_source = ""
 config_source = ""
 config_path = "/data/home/.config/opencode/opencode.json"
 default_model = "openai/gpt-5"
 server_url = ""
 server_password = ""
+hidden_models = []
+model_order = []
 
 [[providers.opencode.env]]
 name = "OPENCODE_API_KEY"

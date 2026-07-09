@@ -73,6 +73,7 @@ With this mode, T3 listens only on the internal host/port and the proxy listens 
 `docker-compose.example.yml` is the fuller workstation example:
 
 - runs non-root via `T3_UID:T3_GID`
+- can add `T3_WORKSPACE_GID` as a supplementary group for NFS/SMB-backed workspaces
 - maps port `${T3_BIND_ADDRESS}:${T3_PORT}:${T3_SERVER_PORT}`
 - bind-mounts workspace, T3 state, Codex home, Claude home, and generic tool home
 - keeps npm global installs/cache in Docker volumes because they can be recreated
@@ -85,6 +86,16 @@ T3_WORKSPACE_HOST=/Users/thomas/Developer
 
 That exposes the whole developer tree at `/workspace` while provider state stays under `/data`.
 
+For a TrueNAS/NFS workspace that is writable through a share group, keep the
+share ACLs on the NAS and set the supplemental group only:
+
+```bash
+T3_WORKSPACE_GID=3001
+```
+
+Do not recursively chown the workspace to the container UID; that breaks SMB/NAS
+ACL expectations.
+
 ## Secrets
 
 Put keys in `.env` or your shell environment:
@@ -92,8 +103,11 @@ Put keys in `.env` or your shell environment:
 ```bash
 LUMO_API_KEY=...
 OPENAI_API_KEY=...
+CODEX_ACCESS_TOKEN=...
 ANTHROPIC_API_KEY=...
+CLAUDE_CODE_OAUTH_TOKEN=...
 OPENCODE_API_KEY=...
+XAI_API_KEY=...
 ```
 
 Provider-specific variables can be added in `config/t3code.toml` with `[[providers.<name>.env]]`.
@@ -109,9 +123,31 @@ T3_PROVIDER_GROK=0
 T3_PROVIDER_OPENCODE=1
 T3_OPENCODE_MANAGED_SERVER=1
 T3_OPENCODE_CONFIG_SOURCE=/config/opencode.lumo.json
-T3_OPENCODE_DEFAULT_MODEL=lumo/auto
-T3_OPENCODE_CUSTOM_MODELS=lumo/auto
+T3_OPENCODE_DEFAULT_MODEL=proton/lumo-plus-v1
+T3_OPENCODE_CUSTOM_MODELS=proton/lumo-basic-v1,proton/lumo-plus-v1,proton/auto
+T3_OPENCODE_MODEL_ORDER=proton/lumo-plus-v1,proton/lumo-basic-v1,proton/auto
 LUMO_API_KEY=...
+```
+
+For full harness setups with rules, agents, commands, plugins, tools, and skills, mount directories under `/config` and let the entrypoint sync them into writable provider homes:
+
+```bash
+T3_OPENCODE_CONFIG_DIR_SOURCE=/config/opencode
+T3_OPENCODE_CONFIG_SOURCE=/data/home/.config/opencode/opencode.jsonc
+OPENCODE_CONFIG_DIR=/data/home/.config/opencode
+T3_CODEX_CONFIG_DIR_SOURCE=/config/codex
+T3_CLAUDE_CONFIG_DIR_SOURCE=/config/claude
+T3_GROK_CONFIG_DIR_SOURCE=/config/grok
+```
+
+OpenCode syncs with `--delete` so the mounted config is authoritative. Codex, Claude, and Grok sync without delete so persisted login/session files are not removed. Keep secrets out of these directories when possible; use environment references such as `{env:LUMO_API_KEY}` in `opencode.jsonc`.
+
+T3 model pickers can be filtered without changing provider configs:
+
+```bash
+T3_OPENCODE_HIDDEN_MODELS=provider/model-a,provider/model-b
+T3_CODEX_HIDDEN_MODELS=gpt-old-model
+T3_PROVIDER_MODEL_PREFERENCES_JSON='{"opencode":{"hiddenModels":["provider/model-a"],"modelOrder":["proton/lumo-plus-v1"]}}'
 ```
 
 ## Persistence
@@ -132,10 +168,10 @@ Then put the numeric output of `id -u` and `id -g` into `T3_UID` and `T3_GID` in
 
 ## Provider Notes
 
-- Codex uses `CODEX_HOME path = /data/codex`.
-- Claude Code uses `HOME = /data/claude-home` for the provider process.
+- Codex uses `CODEX_HOME = /data/codex`. For included ChatGPT/Codex usage, use `t3-auth codex login` / `codex login --device-auth`. API-key auth is available but uses API billing.
+- Claude Code uses `/data/claude-home` for the provider process. Use `ANTHROPIC_API_KEY` for API-billed automation, or `CLAUDE_CODE_OAUTH_TOKEN` from `claude setup-token` for subscription-backed CI/container use.
 - Cursor Agent is installed from the official Cursor installer. Its binary is exposed as both `agent` and `cursor-agent`; T3's default Cursor binary path remains `agent`.
-- Grok Build is installed from the official xAI installer. Only the `grok` binary is exposed in `/usr/local/bin` so it does not shadow Cursor's `agent` command.
+- Grok Build is installed from the official xAI installer. Only the `grok` binary is exposed in `/usr/local/bin` so it does not shadow Cursor's `agent` command. For containers, use `XAI_API_KEY` or `grok login --device-auth`; persisted Grok config/session state lives in `/data/home/.grok`.
 - OpenCode can either be spawned by T3 or started by the container wrapper as a managed local server. Use the managed server mode when you need an explicit OpenCode config file, because T3's native OpenCode spawn path controls the spawned server environment.
 - T3's native provider update checks are disabled by default through `enableProviderUpdateChecks=false` (`T3_ENABLE_PROVIDER_UPDATE_CHECKS=0`), so provider update notices and one-click update prompts should stay hidden. Re-enable them only if you intentionally want T3 to check agent CLI versions.
 
@@ -148,9 +184,16 @@ T3_OPENCODE_ENV_JSON='[{"name":"MY_PROVIDER_KEY","from_env":"MY_PROVIDER_KEY","s
 Interactive auth remains possible:
 
 ```bash
-docker exec -it t3code codex login
-docker exec -it t3code env HOME=/data/claude-home claude auth login
+docker exec -it t3code t3-auth codex login
+docker exec -it t3code t3-auth claude login
 docker exec -it t3code agent login
-docker exec -it t3code grok login
-docker exec -it t3code opencode auth login
+docker exec -it t3code t3-auth grok login
+```
+
+Use API keys only when you intentionally want API-billed usage:
+
+```bash
+docker exec -it t3code t3-auth codex api-key
+docker exec -it t3code t3-auth claude env
+docker exec -it t3code t3-auth grok env
 ```

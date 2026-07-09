@@ -10,6 +10,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
     T3CODE_CONFIG_PATH=/config/t3code.toml \
     HOME=/data/home \
     CODEX_HOME=/data/codex \
+    GROK_CONFIG_DIR=/data/home/.grok \
     XDG_CONFIG_HOME=/data/home/.config \
     XDG_DATA_HOME=/data/home/.local/share \
     XDG_CACHE_HOME=/data/home/.cache \
@@ -35,6 +36,7 @@ RUN apt-get update \
       procps \
       python3 \
       ripgrep \
+      rsync \
       tini \
     && rm -rf /var/lib/apt/lists/*
 
@@ -57,8 +59,10 @@ COPY --chown=t3:t3 scripts/render-config.py /opt/t3-docker/render-config.py
 COPY --chown=t3:t3 scripts/entrypoint.sh /opt/t3-docker/entrypoint.sh
 COPY --chown=t3:t3 scripts/healthcheck.sh /opt/t3-docker/healthcheck.sh
 COPY --chown=t3:t3 scripts/auth-proxy.mjs /opt/t3-docker/auth-proxy.mjs
+COPY --chown=t3:t3 scripts/harness-auth.sh /opt/t3-docker/harness-auth.sh
 
-RUN chmod +x /opt/t3-docker/render-config.py /opt/t3-docker/entrypoint.sh /opt/t3-docker/healthcheck.sh /opt/t3-docker/auth-proxy.mjs
+RUN chmod +x /opt/t3-docker/render-config.py /opt/t3-docker/entrypoint.sh /opt/t3-docker/healthcheck.sh /opt/t3-docker/auth-proxy.mjs /opt/t3-docker/harness-auth.sh \
+    && ln -s /opt/t3-docker/harness-auth.sh /usr/local/bin/t3-auth
 
 USER t3
 WORKDIR /workspace

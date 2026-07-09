@@ -16,9 +16,19 @@ PROVIDER_DEFAULT_MODELS = {
     "opencode": "openai/gpt-5",
 }
 
+PROVIDER_INSTANCE_IDS = {
+    "codex": "codex",
+    "claude": "claudeAgent",
+    "cursor": "cursor",
+    "grok": "grok",
+    "opencode": "opencode",
+}
+
 DEFAULT_PROVIDER_ENV = {
     "codex": [
         {"name": "OPENAI_API_KEY", "from_env": "OPENAI_API_KEY", "sensitive": True},
+        {"name": "CODEX_ACCESS_TOKEN", "from_env": "CODEX_ACCESS_TOKEN", "sensitive": True},
+        {"name": "CODEX_API_KEY", "from_env": "CODEX_API_KEY", "sensitive": True},
         {"name": "OPENAI_BASE_URL", "from_env": "OPENAI_BASE_URL"},
         {"name": "OPENAI_ORG_ID", "from_env": "OPENAI_ORG_ID"},
         {"name": "OPENAI_PROJECT_ID", "from_env": "OPENAI_PROJECT_ID"},
@@ -26,6 +36,7 @@ DEFAULT_PROVIDER_ENV = {
     "claude": [
         {"name": "ANTHROPIC_API_KEY", "from_env": "ANTHROPIC_API_KEY", "sensitive": True},
         {"name": "ANTHROPIC_AUTH_TOKEN", "from_env": "ANTHROPIC_AUTH_TOKEN", "sensitive": True},
+        {"name": "CLAUDE_CODE_OAUTH_TOKEN", "from_env": "CLAUDE_CODE_OAUTH_TOKEN", "sensitive": True},
         {"name": "ANTHROPIC_BASE_URL", "from_env": "ANTHROPIC_BASE_URL"},
         {"name": "ANTHROPIC_DEFAULT_OPUS_MODEL", "from_env": "ANTHROPIC_DEFAULT_OPUS_MODEL"},
         {"name": "ANTHROPIC_DEFAULT_SONNET_MODEL", "from_env": "ANTHROPIC_DEFAULT_SONNET_MODEL"},
@@ -130,6 +141,58 @@ def env_json_list(env_name: str) -> list[dict]:
     if not isinstance(decoded, list) or not all(isinstance(item, dict) for item in decoded):
         raise SystemExit(f"{env_name} must be a JSON array of objects")
     return decoded
+
+
+def env_json_object(env_name: str) -> dict:
+    raw = os.environ.get(env_name)
+    if raw is None or raw.strip() == "":
+        return {}
+    try:
+        decoded = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise SystemExit(f"{env_name} must be JSON: {exc}") from exc
+    if not isinstance(decoded, dict):
+        raise SystemExit(f"{env_name} must be a JSON object")
+    return decoded
+
+
+def normalize_model_preferences(raw: dict, env_name: str) -> dict:
+    normalized = {}
+    for instance_id, value in raw.items():
+        if not isinstance(value, dict):
+            raise SystemExit(f"{env_name}.{instance_id} must be an object")
+        hidden = value.get("hiddenModels", value.get("hidden_models", []))
+        order = value.get("modelOrder", value.get("model_order", []))
+        if not isinstance(hidden, list) or not all(isinstance(item, str) for item in hidden):
+            raise SystemExit(f"{env_name}.{instance_id}.hiddenModels must be an array of strings")
+        if not isinstance(order, list) or not all(isinstance(item, str) for item in order):
+            raise SystemExit(f"{env_name}.{instance_id}.modelOrder must be an array of strings")
+        normalized[str(instance_id)] = {
+            "hiddenModels": hidden,
+            "modelOrder": order,
+        }
+    return normalized
+
+
+def build_provider_model_preferences(providers: dict) -> dict:
+    preferences = normalize_model_preferences(
+        env_json_object("T3_PROVIDER_MODEL_PREFERENCES_JSON"),
+        "T3_PROVIDER_MODEL_PREFERENCES_JSON",
+    )
+
+    for provider_key, instance_id in PROVIDER_INSTANCE_IDS.items():
+        provider_cfg = providers.get(provider_key, {})
+        env_prefix = f"T3_{provider_key.upper()}"
+        hidden = env_or_cfg_list(f"{env_prefix}_HIDDEN_MODELS", provider_cfg, "hidden_models")
+        order = env_or_cfg_list(f"{env_prefix}_MODEL_ORDER", provider_cfg, "model_order")
+        if hidden or order or instance_id in preferences:
+            current = preferences.get(instance_id, {"hiddenModels": [], "modelOrder": []})
+            preferences[instance_id] = {
+                "hiddenModels": hidden if hidden else list(current.get("hiddenModels", [])),
+                "modelOrder": order if order else list(current.get("modelOrder", [])),
+            }
+
+    return preferences
 
 
 def secret_file_name(instance_id: str, env_name: str) -> str:
@@ -260,6 +323,7 @@ def main():
     cursor_env = list(cursor_cfg.get("env", [])) + env_json_list("T3_CURSOR_ENV_JSON")
     grok_env = list(grok_cfg.get("env", [])) + env_json_list("T3_GROK_ENV_JSON")
     opencode_env = list(opencode_cfg.get("env", [])) + env_json_list("T3_OPENCODE_ENV_JSON")
+    provider_model_preferences = build_provider_model_preferences(providers)
 
     opencode_config_content = env_or_cfg_optional(
         "T3_OPENCODE_CONFIG_CONTENT",
@@ -448,6 +512,7 @@ def main():
             "cursor": provider_instances["cursor"]["config"],
             "grok": provider_instances["grok"]["config"],
         },
+        "providerModelPreferences": provider_model_preferences,
         "providerInstances": provider_instances,
     }
 
@@ -463,6 +528,9 @@ def main():
     )
     runtime_values = {
         "T3CODE_HOME": t3_home,
+        "CODEX_HOME": str(provider_instances["codex"]["config"]["homePath"]),
+        "T3_CLAUDE_HOME_PATH": str(provider_instances["claudeAgent"]["config"]["homePath"]),
+        "GROK_CONFIG_DIR": str(env_or_cfg("GROK_CONFIG_DIR", grok_cfg, "config_dir", "/data/home/.grok")),
         "T3_SERVER_HOST": server_host,
         "T3_SERVER_PORT": str(server_port),
         "T3_WORKDIR": workdir,
@@ -478,6 +546,10 @@ def main():
         "T3_UPDATE_CURSOR": "1" if provider_update_enabled(updates, "cursor", cursor_enabled, install_disabled) else "0",
         "T3_UPDATE_GROK": "1" if provider_update_enabled(updates, "grok", grok_enabled, install_disabled) else "0",
         "T3_UPDATE_OPENCODE": "1" if provider_update_enabled(updates, "opencode", opencode_enabled, install_disabled) else "0",
+        "T3_CODEX_CONFIG_DIR_SOURCE": env_or_cfg_optional("T3_CODEX_CONFIG_DIR_SOURCE", codex_cfg, "config_dir_source") or "",
+        "T3_CLAUDE_CONFIG_DIR_SOURCE": env_or_cfg_optional("T3_CLAUDE_CONFIG_DIR_SOURCE", claude_cfg, "config_dir_source") or "",
+        "T3_GROK_CONFIG_DIR_SOURCE": env_or_cfg_optional("T3_GROK_CONFIG_DIR_SOURCE", grok_cfg, "config_dir_source") or "",
+        "T3_OPENCODE_CONFIG_DIR_SOURCE": env_or_cfg_optional("T3_OPENCODE_CONFIG_DIR_SOURCE", opencode_cfg, "config_dir_source") or "",
         "T3_OPENCODE_MANAGED_SERVER": "1" if opencode_managed_server else "0",
         "T3_OPENCODE_MANAGED_HOST": opencode_managed_host,
         "T3_OPENCODE_MANAGED_PORT": str(opencode_managed_port),

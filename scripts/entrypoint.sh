@@ -14,12 +14,119 @@ export CODEX_HOME="${CODEX_HOME:-/data/codex}"
 export XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
 export XDG_DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}"
 export XDG_CACHE_HOME="${XDG_CACHE_HOME:-$HOME/.cache}"
+export OPENCODE_CONFIG_DIR="${OPENCODE_CONFIG_DIR:-$XDG_CONFIG_HOME/opencode}"
 export NPM_CONFIG_PREFIX="${NPM_CONFIG_PREFIX:-/data/npm-global}"
 export npm_config_prefix="$NPM_CONFIG_PREFIX"
 export NPM_CONFIG_CACHE="${NPM_CONFIG_CACHE:-/data/npm-cache}"
 export npm_config_cache="$NPM_CONFIG_CACHE"
 export PATH="$NPM_CONFIG_PREFIX/bin:$HOME/.local/bin:$HOME/.grok/bin:$PATH"
-mkdir -p "$HOME" "$XDG_CONFIG_HOME" "$XDG_DATA_HOME" "$XDG_CACHE_HOME"
+mkdir -p \
+  "$HOME" \
+  "$CODEX_HOME" \
+  "${T3_CLAUDE_HOME_PATH:-/data/claude-home}" \
+  "${GROK_CONFIG_DIR:-$HOME/.grok}" \
+  "$XDG_CONFIG_HOME" \
+  "$XDG_DATA_HOME" \
+  "$XDG_CACHE_HOME" \
+  "$OPENCODE_CONFIG_DIR"
+
+provision_opencode_config_dir() {
+  local source="${T3_OPENCODE_CONFIG_DIR_SOURCE:-}"
+  local target="${OPENCODE_CONFIG_DIR:-$XDG_CONFIG_HOME/opencode}"
+
+  if [[ -z "$source" ]]; then
+    return 0
+  fi
+
+  if [[ ! -d "$source" ]]; then
+    echo "T3_OPENCODE_CONFIG_DIR_SOURCE points to a missing directory: $source" >&2
+    exit 1
+  fi
+
+  mkdir -p "$target"
+  rsync -a --delete --exclude='node_modules/' "$source"/ "$target"/
+  if [[ -d "$target/tools" ]]; then
+    find "$target/tools" -type f \( -name '*.sh' -o -name '*.py' \) -exec chmod u+x {} +
+  fi
+
+  if [[ ! -f "$target/package.json" ]]; then
+    return 0
+  fi
+
+  local digest_input=("$target/package.json")
+  if [[ -f "$target/package-lock.json" ]]; then
+    digest_input+=("$target/package-lock.json")
+  fi
+
+  local stamp="$target/node_modules/.t3-config-deps.sha256"
+  local digest
+  digest="$(sha256sum "${digest_input[@]}" | sha256sum | awk '{print $1}')"
+
+  if [[ -f "$stamp" && "$(cat "$stamp")" == "$digest" ]]; then
+    return 0
+  fi
+
+  local had_deps=0
+  if [[ -f "$stamp" ]]; then
+    had_deps=1
+  fi
+
+  echo "Installing OpenCode config dependencies in $target"
+  if ! npm install --prefix "$target" --omit=dev --no-audit --no-fund; then
+    if [[ "$had_deps" == "1" ]]; then
+      echo "Warning: failed to refresh OpenCode config dependencies; continuing with existing node_modules." >&2
+      return 0
+    fi
+    exit 1
+  fi
+
+  mkdir -p "$(dirname "$stamp")"
+  printf '%s\n' "$digest" > "$stamp"
+}
+
+provision_optional_config_dir() {
+  local label="$1"
+  local source="$2"
+  local target="$3"
+
+  if [[ -z "$source" ]]; then
+    return 0
+  fi
+
+  if [[ ! -d "$source" ]]; then
+    echo "${label} config source points to a missing directory: $source" >&2
+    exit 1
+  fi
+
+  mkdir -p "$target"
+  echo "Syncing ${label} config from $source to $target"
+  rsync -a --exclude='node_modules/' "$source"/ "$target"/
+
+  if [[ -d "$target/tools" ]]; then
+    find "$target/tools" -type f \( -name '*.sh' -o -name '*.py' \) -exec chmod u+x {} +
+  fi
+}
+
+provision_provider_config_dirs() {
+  local codex_source="${T3_CODEX_CONFIG_DIR_SOURCE:-}"
+  local claude_source="${T3_CLAUDE_CONFIG_DIR_SOURCE:-}"
+  local grok_source="${T3_GROK_CONFIG_DIR_SOURCE:-}"
+
+  if [[ -z "$codex_source" && -d /config/codex ]]; then
+    codex_source=/config/codex
+  fi
+  if [[ -z "$claude_source" && -d /config/claude ]]; then
+    claude_source=/config/claude
+  fi
+  if [[ -z "$grok_source" && -d /config/grok ]]; then
+    grok_source=/config/grok
+  fi
+
+  provision_opencode_config_dir
+  provision_optional_config_dir "Codex" "$codex_source" "${CODEX_HOME:-/data/codex}"
+  provision_optional_config_dir "Claude" "$claude_source" "${T3_CLAUDE_HOME_PATH:-/data/claude-home}"
+  provision_optional_config_dir "Grok" "$grok_source" "${GROK_CONFIG_DIR:-$HOME/.grok}"
+}
 
 install_npm_latest() {
   local enabled="$1"
@@ -189,6 +296,7 @@ run_t3_with_auth_proxy() {
 }
 
 if [[ "${T3_AUTO_UPDATE_EFFECTIVE:-1}" == "1" ]]; then
+  provision_provider_config_dirs
   install_npm_latest "${T3_UPDATE_T3:-1}" "t3" "T3 Code" "t3"
   install_npm_latest "${T3_UPDATE_CODEX:-0}" "@openai/codex" "Codex CLI" "codex"
   install_npm_latest "${T3_UPDATE_CLAUDE:-0}" "@anthropic-ai/claude-code" "Claude Code" "claude"
@@ -196,6 +304,7 @@ if [[ "${T3_AUTO_UPDATE_EFFECTIVE:-1}" == "1" ]]; then
   install_cursor_latest "${T3_UPDATE_CURSOR:-0}"
   install_grok_latest "${T3_UPDATE_GROK:-0}"
 else
+  provision_provider_config_dirs
   if ! command -v t3 >/dev/null 2>&1; then
     echo "T3_AUTO_UPDATE=0 but t3 is not installed in $NPM_CONFIG_PREFIX/bin." >&2
     echo "Start once with T3_AUTO_UPDATE=1 or pre-populate the /data volume." >&2

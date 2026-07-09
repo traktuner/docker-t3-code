@@ -21,7 +21,7 @@ install_npm_clis() {
   export npm_config_cache=/tmp/npm-cache
   local t3_package="t3@${T3_VERSION:-latest}"
 
-  npm install -g --prefix /usr/local --no-audit --no-fund \
+  npm install -g --prefix /usr/local --no-audit --no-fund --dangerously-allow-all-scripts \
     "$t3_package" \
     @openai/codex \
     @anthropic-ai/claude-code \

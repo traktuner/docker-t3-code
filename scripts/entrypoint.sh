@@ -32,7 +32,7 @@ install_npm_latest() {
   fi
 
   echo "Updating $label package: $package_name@latest"
-  if npm install -g --no-audit --no-fund "${package_name}@latest"; then
+  if npm install -g --no-audit --no-fund --dangerously-allow-all-scripts "${package_name}@latest"; then
     return 0
   fi
 

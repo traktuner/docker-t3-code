@@ -36,8 +36,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
       procps \
       python3 \
       ripgrep \
-      rsync \
-      tini
+      rsync
 
 RUN --mount=type=cache,target=/data/npm-cache \
     npm install -g npm@latest

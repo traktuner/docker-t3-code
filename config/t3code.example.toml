@@ -105,6 +105,12 @@ managed_server = false
 managed_host = "127.0.0.1"
 managed_port = 4096
 config_dir_source = ""
+# preserve-mcp mirrors config_dir_source but keeps runtime-added MCP servers.
+# Other modes: mirror, merge, seed, none.
+config_sync_mode = "preserve-mcp"
+# Values: all/1, core, docs, off/0.
+cloudflare_mcp = "all"
+mcp_servers_file = ""
 config_source = ""
 config_path = "/data/home/.config/opencode/opencode.json"
 default_model = "openai/gpt-5"

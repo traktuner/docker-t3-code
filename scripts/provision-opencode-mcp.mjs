@@ -40,6 +40,12 @@ const cloudflareMcp = {
   },
 };
 
+const cloudflareMcpProfiles = {
+  docs: ["cloudflare-docs"],
+  core: ["cloudflare", "cloudflare-docs"],
+  all: Object.keys(cloudflareMcp),
+};
+
 function parseMcpServers(label, raw) {
   let parsed;
   try {
@@ -63,15 +69,113 @@ function parseMcpServers(label, raw) {
   return servers;
 }
 
-function desiredMcpServers() {
-  const desired = {};
-  if (process.env.T3_OPENCODE_CLOUDFLARE_MCP !== "0") {
-    Object.assign(desired, cloudflareMcp);
+const rawEntryMarker = Symbol("rawMcpEntry");
+
+function addObjectEntries(target, entries) {
+  for (const [name, config] of Object.entries(entries)) {
+    target.set(name, config);
   }
+}
+
+function addCloudflareEntries(target) {
+  const raw = (process.env.T3_OPENCODE_CLOUDFLARE_MCP || "1").trim().toLowerCase();
+  if (["0", "false", "no", "off", "none", "disabled"].includes(raw)) {
+    return;
+  }
+
+  const profile = ["1", "true", "yes", "on", "all", "enabled"].includes(raw) ? "all" : raw;
+  const names = cloudflareMcpProfiles[profile];
+  if (!names) {
+    throw new Error(
+      "T3_OPENCODE_CLOUDFLARE_MCP must be one of: 0, 1, false, true, off, on, docs, core, all",
+    );
+  }
+
+  for (const name of names) {
+    target.set(name, cloudflareMcp[name]);
+  }
+}
+
+function readJsonLikeValueEnd(input, valueStart, objectEnd) {
+  if (input[valueStart] === "{" || input[valueStart] === "[") {
+    const valueEnd = findMatchingClose(input, valueStart);
+    if (valueEnd < 0) return -1;
+    return valueEnd;
+  }
+  if (input[valueStart] === '"') {
+    const valueString = readString(input, valueStart);
+    return valueString ? valueString.end - 1 : -1;
+  }
+
+  let valueEnd = valueStart;
+  while (valueEnd < objectEnd && input[valueEnd] !== "," && input[valueEnd] !== "\n") {
+    valueEnd += 1;
+  }
+  return valueEnd - 1;
+}
+
+function collectMcpEntries(input, configLabel) {
+  const entries = new Map();
+  const text = input.trim().length === 0 ? "{}\n" : input;
+  const rootStart = text.indexOf("{");
+  if (rootStart < 0) throw new Error(`${configLabel} does not contain a JSON object`);
+  const rootEnd = findMatchingBrace(text, rootStart);
+  if (rootEnd < 0) throw new Error(`${configLabel} has an unterminated root object`);
+  const mcpProperty = findObjectProperty(text, rootStart, rootEnd, "mcp");
+  if (!mcpProperty) return entries;
+  if (text[mcpProperty.valueStart] !== "{") {
+    throw new Error(`${configLabel} has an mcp property, but it is not an object`);
+  }
+
+  let i = mcpProperty.valueStart + 1;
+  while (i < mcpProperty.valueEnd) {
+    i = skipSpaceAndComments(text, i);
+    if (i >= mcpProperty.valueEnd || text[i] === "}") break;
+    if (text[i] === ",") {
+      i += 1;
+      continue;
+    }
+    const key = readString(text, i);
+    if (!key) {
+      i += 1;
+      continue;
+    }
+    const colon = skipSpaceAndComments(text, key.end);
+    if (text[colon] !== ":") {
+      i = key.end;
+      continue;
+    }
+    const valueStart = skipSpaceAndComments(text, colon + 1);
+    const valueEnd = readJsonLikeValueEnd(text, valueStart, mcpProperty.valueEnd);
+    if (valueEnd < valueStart) throw new Error(`${configLabel}.${key.value} has an invalid value`);
+    entries.set(key.value, { [rawEntryMarker]: text.slice(valueStart, valueEnd + 1).trim() });
+    i = valueEnd + 1;
+  }
+  return entries;
+}
+
+function desiredMcpServers() {
+  const desired = new Map();
+
+  const preserveFile = process.env.T3_OPENCODE_MCP_PRESERVE_FILE || "";
+  if (preserveFile && fs.existsSync(preserveFile)) {
+    try {
+      for (const [name, config] of collectMcpEntries(
+        fs.readFileSync(preserveFile, "utf8"),
+        `T3_OPENCODE_MCP_PRESERVE_FILE (${preserveFile})`,
+      )) {
+        desired.set(name, config);
+      }
+    } catch (error) {
+      console.warn(`Warning: could not preserve existing OpenCode MCP entries: ${error.message}`);
+    }
+  }
+
+  addCloudflareEntries(desired);
 
   const extraFile = process.env.T3_OPENCODE_MCP_SERVERS_FILE || "";
   if (extraFile) {
-    Object.assign(
+    addObjectEntries(
       desired,
       parseMcpServers(`T3_OPENCODE_MCP_SERVERS_FILE (${extraFile})`, fs.readFileSync(extraFile, "utf8")),
     );
@@ -79,7 +183,7 @@ function desiredMcpServers() {
 
   const extraJson = process.env.T3_OPENCODE_MCP_SERVERS_JSON || process.env.T3_OPENCODE_MCP_JSON || "";
   if (extraJson.trim()) {
-    Object.assign(desired, parseMcpServers("T3_OPENCODE_MCP_SERVERS_JSON", extraJson));
+    addObjectEntries(desired, parseMcpServers("T3_OPENCODE_MCP_SERVERS_JSON", extraJson));
   }
 
   return desired;
@@ -134,7 +238,11 @@ function readString(input, index) {
   return null;
 }
 
-function findMatchingBrace(input, openIndex) {
+function findMatchingClose(input, openIndex) {
+  const open = input[openIndex];
+  const close = open === "{" ? "}" : open === "[" ? "]" : "";
+  if (!close) return -1;
+
   let depth = 0;
   let i = openIndex;
   while (i < input.length) {
@@ -156,14 +264,18 @@ function findMatchingBrace(input, openIndex) {
       i += 2;
       continue;
     }
-    if (c === "{") depth += 1;
-    if (c === "}") {
+    if (c === open) depth += 1;
+    if (c === close) {
       depth -= 1;
       if (depth === 0) return i;
     }
     i += 1;
   }
   return -1;
+}
+
+function findMatchingBrace(input, openIndex) {
+  return findMatchingClose(input, openIndex);
 }
 
 function findObjectProperty(input, objectStart, objectEnd, propertyName) {
@@ -186,19 +298,8 @@ function findObjectProperty(input, objectStart, objectEnd, propertyName) {
       continue;
     }
     const valueStart = skipSpaceAndComments(input, colon + 1);
-    let valueEnd = valueStart;
-    if (input[valueStart] === "{") {
-      valueEnd = findMatchingBrace(input, valueStart);
-      if (valueEnd < 0) return null;
-    } else if (input[valueStart] === '"') {
-      const valueString = readString(input, valueStart);
-      valueEnd = valueString ? valueString.end - 1 : valueStart;
-    } else {
-      while (valueEnd < objectEnd && input[valueEnd] !== "," && input[valueEnd] !== "\n") {
-        valueEnd += 1;
-      }
-      valueEnd -= 1;
-    }
+    const valueEnd = readJsonLikeValueEnd(input, valueStart, objectEnd);
+    if (valueEnd < valueStart) return null;
     if (key.value === propertyName) {
       return { keyStart: i, keyEnd: key.end, valueStart, valueEnd };
     }
@@ -213,15 +314,27 @@ function lineIndent(input, index) {
   return match ? match[0] : "";
 }
 
+function renderEntryValue(value) {
+  if (
+    value &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    typeof value[rawEntryMarker] === "string"
+  ) {
+    return value[rawEntryMarker];
+  }
+  return JSON.stringify(value);
+}
+
 function entryLines(entries, indent) {
   return entries
-    .map(([name, config]) => `${indent}${JSON.stringify(name)}: ${JSON.stringify(config)}`)
+    .map(([name, config]) => `${indent}${JSON.stringify(name)}: ${renderEntryValue(config)}`)
     .join(",\n");
 }
 
 function ensureConfig(input, mcpServers) {
   let text = input.trim().length === 0 ? "{}\n" : input;
-  const entries = Object.entries(mcpServers);
+  const entries = [...mcpServers.entries()];
   if (entries.length === 0) return text;
 
   const rootStart = text.indexOf("{");

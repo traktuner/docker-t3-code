@@ -2,7 +2,8 @@
 .DS_Store
 data
 workspace
-config/t3code.toml
+config/*
+!config/*.example.*
 .env
 *.log
 node_modules

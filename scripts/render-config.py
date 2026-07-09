@@ -376,6 +376,17 @@ def main():
     if opencode_server_url is None:
         opencode_server_url = opencode_managed_url if opencode_managed_server else ""
 
+    opencode_mcp_servers_json = os.environ.get("T3_OPENCODE_MCP_SERVERS_JSON", "")
+    if opencode_mcp_servers_json == "":
+        configured_mcp_servers_json = opencode_cfg.get("mcp_servers_json")
+        configured_mcp_servers = opencode_cfg.get("mcp_servers")
+        if configured_mcp_servers_json is not None:
+            opencode_mcp_servers_json = str(configured_mcp_servers_json)
+        elif configured_mcp_servers is not None:
+            if not isinstance(configured_mcp_servers, dict):
+                raise SystemExit("providers.opencode.mcp_servers must be a TOML table")
+            opencode_mcp_servers_json = json.dumps(configured_mcp_servers, separators=(",", ":"))
+
     provider_default_models = dict(PROVIDER_DEFAULT_MODELS)
     provider_default_models["opencode"] = str(
         env_or_cfg(
@@ -555,6 +566,19 @@ def main():
         "T3_CLAUDE_CONFIG_DIR_SOURCE": env_or_cfg_optional("T3_CLAUDE_CONFIG_DIR_SOURCE", claude_cfg, "config_dir_source") or "",
         "T3_GROK_CONFIG_DIR_SOURCE": env_or_cfg_optional("T3_GROK_CONFIG_DIR_SOURCE", grok_cfg, "config_dir_source") or "",
         "T3_OPENCODE_CONFIG_DIR_SOURCE": env_or_cfg_optional("T3_OPENCODE_CONFIG_DIR_SOURCE", opencode_cfg, "config_dir_source") or "",
+        "T3_OPENCODE_CONFIG_SYNC_MODE": str(
+            env_or_cfg("T3_OPENCODE_CONFIG_SYNC_MODE", opencode_cfg, "config_sync_mode", "preserve-mcp")
+        ),
+        "T3_OPENCODE_CLOUDFLARE_MCP": str(
+            env_or_cfg("T3_OPENCODE_CLOUDFLARE_MCP", opencode_cfg, "cloudflare_mcp", "1")
+        ),
+        "T3_OPENCODE_MCP_SERVERS_FILE": env_or_cfg_optional(
+            "T3_OPENCODE_MCP_SERVERS_FILE",
+            opencode_cfg,
+            "mcp_servers_file",
+        )
+        or "",
+        "T3_OPENCODE_MCP_SERVERS_JSON": opencode_mcp_servers_json,
         "T3_OPENCODE_MANAGED_SERVER": "1" if opencode_managed_server else "0",
         "T3_OPENCODE_MANAGED_HOST": opencode_managed_host,
         "T3_OPENCODE_MANAGED_PORT": str(opencode_managed_port),

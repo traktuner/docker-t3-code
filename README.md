@@ -133,6 +133,7 @@ For full harness setups with rules, agents, commands, plugins, tools, and skills
 
 ```bash
 T3_OPENCODE_CONFIG_DIR_SOURCE=/config/opencode
+T3_OPENCODE_CONFIG_SYNC_MODE=preserve-mcp
 T3_OPENCODE_CONFIG_SOURCE=/data/home/.config/opencode/opencode.jsonc
 OPENCODE_CONFIG_DIR=/data/home/.config/opencode
 T3_CODEX_CONFIG_DIR_SOURCE=/config/codex
@@ -140,7 +141,7 @@ T3_CLAUDE_CONFIG_DIR_SOURCE=/config/claude
 T3_GROK_CONFIG_DIR_SOURCE=/config/grok
 ```
 
-OpenCode syncs with `--delete` so the mounted config is authoritative. Codex, Claude, and Grok sync without delete so persisted login/session files are not removed. Keep secrets out of these directories when possible; use environment references such as `{env:LUMO_API_KEY}` in `opencode.jsonc`.
+OpenCode defaults to `T3_OPENCODE_CONFIG_SYNC_MODE=preserve-mcp`: the mounted config is mirrored into the writable runtime config, but MCP server registrations added later through OpenCode are restored after the sync. Use `mirror` when `/config/opencode` must be strictly authoritative, `seed` for first-start-only defaults, `merge` for overwrite-without-delete, or `none` to skip syncing. Codex, Claude, and Grok sync without delete so persisted login/session files are not removed. Keep secrets out of these directories when possible; use environment references such as `{env:LUMO_API_KEY}` in `opencode.jsonc`.
 
 Cloudflare's official OpenCode MCP set is provisioned into the writable runtime OpenCode config by default:
 
@@ -148,7 +149,7 @@ Cloudflare's official OpenCode MCP set is provisioned into the writable runtime 
 T3_OPENCODE_CLOUDFLARE_MCP=1
 ```
 
-This adds `cloudflare`, `cloudflare-docs`, `cloudflare-bindings`, `cloudflare-builds`, and `cloudflare-observability` when missing. Existing entries are left unchanged. Set `T3_OPENCODE_CLOUDFLARE_MCP=0` to opt out.
+This adds `cloudflare`, `cloudflare-docs`, `cloudflare-bindings`, `cloudflare-builds`, and `cloudflare-observability` when missing. Existing entries are left unchanged. Set `T3_OPENCODE_CLOUDFLARE_MCP=core` for only `cloudflare` plus `cloudflare-docs`, `docs` for docs only, or `0`/`off` to opt out.
 
 Additional OpenCode MCP servers can be provisioned generically by environment variable or mounted JSON file. The value can be either the direct `"mcp"` object or an object containing `"mcp"`:
 
@@ -156,6 +157,8 @@ Additional OpenCode MCP servers can be provisioned generically by environment va
 T3_OPENCODE_MCP_SERVERS_JSON='{"my-remote-mcp":{"type":"remote","url":"https://example.com/mcp","enabled":true,"oauth":{}}}'
 T3_OPENCODE_MCP_SERVERS_FILE=/config/opencode-mcp.json
 ```
+
+The same can be described in `config/t3code.toml` via `providers.opencode.mcp_servers_file`, `providers.opencode.mcp_servers_json`, or a `providers.opencode.mcp_servers` table.
 
 Provisioning is merge-only: if a server name already exists in the runtime OpenCode config, the existing entry is left untouched. Mount `/config/opencode` when you want the whole OpenCode config to be authoritative.
 
@@ -171,7 +174,7 @@ T3_PROVIDER_MODEL_PREFERENCES_JSON='{"opencode":{"hiddenModels":["provider/model
 
 - `data/` contains T3 state, provider auth/config homes, logs, and generated secrets.
 - `workspace/` is the default project directory shown to T3.
-- `config/t3code.toml` and `.env` are intentionally ignored by git.
+- `.env` and real files under `config/` are intentionally ignored by git and Docker build context; only `config/*.example.*` belongs in the repository.
 - In `docker-compose.example.yml`, `t3code-npm-global` and `t3code-npm-cache` are Docker volumes. Removing them only forces T3/provider CLI reinstall on next start.
 
 On Linux, make bind-mounted directories writable by the configured non-root UID/GID:

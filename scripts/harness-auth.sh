@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
+RUNTIME_ENV=/tmp/t3-docker/runtime.env
+if [[ -f "$RUNTIME_ENV" ]]; then
+  # shellcheck disable=SC1090
+  source "$RUNTIME_ENV"
+fi
+
 usage() {
   cat <<'USAGE'
 Usage:

@@ -33,6 +33,15 @@ mkdir -p \
 provision_opencode_config_dir() {
   local source="${T3_OPENCODE_CONFIG_DIR_SOURCE:-}"
   local target="${OPENCODE_CONFIG_DIR:-$XDG_CONFIG_HOME/opencode}"
+  local sync_mode="${T3_OPENCODE_CONFIG_SYNC_MODE:-preserve-mcp}"
+  local -a rsync_args=(
+    -a
+    --checksum
+    --exclude='node_modules/'
+    --exclude='*.bak*'
+    --exclude='*~'
+    --exclude='.DS_Store'
+  )
 
   if [[ -z "$source" ]]; then
     return 0
@@ -44,7 +53,39 @@ provision_opencode_config_dir() {
   fi
 
   mkdir -p "$target"
-  rsync -a --delete --exclude='node_modules/' "$source"/ "$target"/
+  sync_mode="$(printf '%s' "$sync_mode" | tr '[:upper:]_' '[:lower:]-' | tr -d '[:space:]')"
+  case "$sync_mode" in
+    none)
+      echo "Skipping OpenCode config sync because T3_OPENCODE_CONFIG_SYNC_MODE=none"
+      ;;
+    seed)
+      echo "Seeding missing OpenCode config files from $source to $target"
+      rsync "${rsync_args[@]}" --ignore-existing "$source"/ "$target"/
+      ;;
+    merge)
+      echo "Merging OpenCode config from $source to $target"
+      rsync "${rsync_args[@]}" "$source"/ "$target"/
+      ;;
+    mirror)
+      echo "Mirroring OpenCode config from $source to $target"
+      rsync "${rsync_args[@]}" --delete "$source"/ "$target"/
+      ;;
+    preserve-mcp)
+      if [[ -f "$target/opencode.jsonc" && -z "${T3_OPENCODE_MCP_PRESERVE_FILE:-}" ]]; then
+        T3_OPENCODE_MCP_PRESERVE_FILE="$(mktemp /tmp/t3-docker/opencode-mcp-preserve.XXXXXX.jsonc)"
+        T3_OPENCODE_MCP_PRESERVE_FILE_GENERATED=1
+        cp "$target/opencode.jsonc" "$T3_OPENCODE_MCP_PRESERVE_FILE"
+        export T3_OPENCODE_MCP_PRESERVE_FILE T3_OPENCODE_MCP_PRESERVE_FILE_GENERATED
+      fi
+      echo "Mirroring OpenCode config from $source to $target while preserving runtime MCP registrations"
+      rsync "${rsync_args[@]}" --delete "$source"/ "$target"/
+      ;;
+    *)
+      echo "T3_OPENCODE_CONFIG_SYNC_MODE must be one of: preserve-mcp, mirror, merge, seed, none" >&2
+      exit 1
+      ;;
+  esac
+
   if [[ -d "$target/tools" ]]; then
     find "$target/tools" -type f \( -name '*.sh' -o -name '*.py' \) -exec chmod u+x {} +
   fi
@@ -84,11 +125,7 @@ provision_opencode_config_dir() {
   printf '%s\n' "$digest" > "$stamp"
 }
 
-provision_opencode_cloudflare_mcp() {
-  if [[ "${T3_OPENCODE_CLOUDFLARE_MCP:-1}" == "0" ]]; then
-    return 0
-  fi
-
+provision_opencode_mcp() {
   local config_path="${T3_OPENCODE_CONFIG:-}"
   local target_dir="${OPENCODE_CONFIG_DIR:-$XDG_CONFIG_HOME/opencode}"
   if [[ -z "$config_path" ]]; then
@@ -112,6 +149,11 @@ provision_opencode_cloudflare_mcp() {
   fi
 
   node /opt/t3-docker/provision-opencode-mcp.mjs "$config_path"
+
+  if [[ "${T3_OPENCODE_MCP_PRESERVE_FILE_GENERATED:-0}" == "1" ]]; then
+    rm -f "${T3_OPENCODE_MCP_PRESERVE_FILE:-}"
+    unset T3_OPENCODE_MCP_PRESERVE_FILE T3_OPENCODE_MCP_PRESERVE_FILE_GENERATED
+  fi
 }
 
 provision_optional_config_dir() {
@@ -135,7 +177,12 @@ provision_optional_config_dir() {
 
   mkdir -p "$target"
   echo "Syncing ${label} config from $source to $target"
-  rsync -a --exclude='node_modules/' "$source"/ "$target"/
+  rsync -a --checksum \
+    --exclude='node_modules/' \
+    --exclude='*.bak*' \
+    --exclude='*~' \
+    --exclude='.DS_Store' \
+    "$source"/ "$target"/
 
   if [[ -d "$target/tools" ]]; then
     find "$target/tools" -type f \( -name '*.sh' -o -name '*.py' \) -exec chmod u+x {} +
@@ -158,7 +205,7 @@ provision_provider_config_dirs() {
   fi
 
   provision_opencode_config_dir
-  provision_opencode_cloudflare_mcp
+  provision_opencode_mcp
   provision_optional_config_dir "Codex" "$codex_source" "${CODEX_HOME:-/data/codex}" "${T3_PROVIDER_CODEX:-1}"
   provision_optional_config_dir "Claude" "$claude_source" "${T3_CLAUDE_HOME_PATH:-/data/claude-home}" "${T3_PROVIDER_CLAUDE:-1}"
   provision_optional_config_dir "Grok" "$grok_source" "${GROK_CONFIG_DIR:-$HOME/.grok}" "${T3_PROVIDER_GROK:-1}"

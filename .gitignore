@@ -1,6 +1,7 @@
 .env
 data/
 workspace/
-config/t3code.toml
+config/*
+!config/*.example.*
 __pycache__/
 scripts/__pycache__/

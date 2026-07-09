@@ -17,8 +17,9 @@ new_tmp_dir() {
 }
 
 install_npm_clis() {
-  export NPM_CONFIG_CACHE=/tmp/npm-cache
-  export npm_config_cache=/tmp/npm-cache
+  local npm_cache="${T3_DOCKER_NPM_CACHE_DIR:-/tmp/npm-cache}"
+  export NPM_CONFIG_CACHE="$npm_cache"
+  export npm_config_cache="$npm_cache"
   local t3_package="t3@${T3_VERSION:-latest}"
 
   npm install -g --prefix /usr/local --no-audit --no-fund --dangerously-allow-all-scripts \
@@ -26,8 +27,11 @@ install_npm_clis() {
     @openai/codex \
     @anthropic-ai/claude-code \
     opencode-ai
-  npm cache clean --force
-  rm -rf /tmp/npm-cache
+
+  if [[ "${T3_DOCKER_KEEP_NPM_CACHE:-0}" != "1" ]]; then
+    npm cache clean --force
+    rm -rf "$npm_cache"
+  fi
 }
 
 install_cursor_agent() {

@@ -21,6 +21,10 @@ on:
         description: "Override our build number for the selected T3 version."
         required: false
         type: string
+      platforms:
+        description: "Comma-separated target platforms. Empty uses repository variable IMAGE_PLATFORMS or the multi-arch default."
+        required: false
+        type: string
   schedule:
     - cron: "24 3 * * *"
 
@@ -54,6 +58,29 @@ jobs:
         id: image
         shell: bash
         run: echo "name=${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve build platforms
+        id: platforms
+        shell: bash
+        env:
+          REQUESTED_PLATFORMS: ${{ github.event.inputs.platforms || '' }}
+          REPOSITORY_PLATFORMS: ${{ vars.IMAGE_PLATFORMS || '' }}
+        run: |
+          set -euo pipefail
+
+          requested="${REQUESTED_PLATFORMS//[[:space:]]/}"
+          repository="${REPOSITORY_PLATFORMS//[[:space:]]/}"
+          platforms="${requested:-$repository}"
+          if [[ -z "$platforms" ]]; then
+            platforms="linux/amd64,linux/arm64"
+          fi
+          if [[ -z "$platforms" ]]; then
+            echo "No build platforms resolved." >&2
+            exit 1
+          fi
+
+          echo "platforms=$platforms" >> "$GITHUB_OUTPUT"
+          echo "Build platforms: $platforms"
 
       - name: Resolve T3 version tag
         id: version
@@ -211,7 +238,7 @@ jobs:
         with:
           context: .
           file: ./Dockerfile
-          platforms: linux/amd64,linux/arm64
+          platforms: ${{ steps.platforms.outputs.platforms }}
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

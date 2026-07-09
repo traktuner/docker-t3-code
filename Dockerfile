@@ -1,11 +1,10 @@
+# syntax=docker/dockerfile:1.7
+
 FROM node:26-bookworm-slim
 
 ARG T3_VERSION=latest
-ARG T3_BUILD_NUMBER=1
 
 ENV DEBIAN_FRONTEND=noninteractive \
-    T3_IMAGE_T3_VERSION=${T3_VERSION} \
-    T3_IMAGE_BUILD_NUMBER=${T3_BUILD_NUMBER} \
     T3CODE_HOME=/data/t3 \
     T3CODE_CONFIG_PATH=/config/t3code.toml \
     HOME=/data/home \
@@ -20,9 +19,10 @@ ENV DEBIAN_FRONTEND=noninteractive \
     npm_config_cache=/data/npm-cache \
     PATH=/data/npm-global/bin:/data/home/.local/bin:/data/home/.grok/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
-LABEL org.opencontainers.image.version="${T3_VERSION}-${T3_BUILD_NUMBER}"
-
-RUN apt-get update \
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
+    rm -f /etc/apt/apt.conf.d/docker-clean \
+    && apt-get update \
     && apt-get install -y --no-install-recommends \
       bash \
       build-essential \
@@ -37,11 +37,10 @@ RUN apt-get update \
       python3 \
       ripgrep \
       rsync \
-      tini \
-    && rm -rf /var/lib/apt/lists/*
+      tini
 
-RUN npm install -g npm@latest \
-    && npm cache clean --force
+RUN --mount=type=cache,target=/data/npm-cache \
+    npm install -g npm@latest
 
 RUN userdel -r node 2>/dev/null || true \
     && useradd --create-home --home-dir /home/t3 --shell /bin/bash --uid 1000 t3 \
@@ -51,11 +50,15 @@ RUN userdel -r node 2>/dev/null || true \
 
 COPY scripts/install-provider-clis.sh /opt/t3-docker/install-provider-clis.sh
 
-RUN chmod +x /opt/t3-docker/install-provider-clis.sh \
-    && T3_VERSION="${T3_VERSION}" /opt/t3-docker/install-provider-clis.sh \
+RUN --mount=type=cache,target=/tmp/npm-cache \
+    chmod +x /opt/t3-docker/install-provider-clis.sh \
+    && T3_DOCKER_KEEP_NPM_CACHE=1 T3_DOCKER_NPM_CACHE_DIR=/tmp/npm-cache T3_VERSION="${T3_VERSION}" /opt/t3-docker/install-provider-clis.sh \
     && chown -R t3:t3 /data
 
-RUN apt-get update \
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
+    rm -f /etc/apt/apt.conf.d/docker-clean \
+    && apt-get update \
     && apt-get install -y --no-install-recommends gnupg \
     && mkdir -p -m 0755 /etc/apt/keyrings \
     && curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
@@ -64,8 +67,7 @@ RUN apt-get update \
     && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
       > /etc/apt/sources.list.d/github-cli.list \
     && apt-get update \
-    && apt-get install -y --no-install-recommends gh \
-    && rm -rf /var/lib/apt/lists/*
+    && apt-get install -y --no-install-recommends gh
 
 COPY --chown=t3:t3 scripts/render-config.py /opt/t3-docker/render-config.py
 COPY --chown=t3:t3 scripts/entrypoint.sh /opt/t3-docker/entrypoint.sh
@@ -75,6 +77,13 @@ COPY --chown=t3:t3 scripts/harness-auth.sh /opt/t3-docker/harness-auth.sh
 
 RUN chmod +x /opt/t3-docker/render-config.py /opt/t3-docker/entrypoint.sh /opt/t3-docker/healthcheck.sh /opt/t3-docker/auth-proxy.mjs /opt/t3-docker/harness-auth.sh \
     && ln -s /opt/t3-docker/harness-auth.sh /usr/local/bin/t3-auth
+
+ARG T3_BUILD_NUMBER=1
+
+ENV T3_IMAGE_T3_VERSION=${T3_VERSION} \
+    T3_IMAGE_BUILD_NUMBER=${T3_BUILD_NUMBER}
+
+LABEL org.opencontainers.image.version="${T3_VERSION}-${T3_BUILD_NUMBER}"
 
 USER t3
 WORKDIR /workspace

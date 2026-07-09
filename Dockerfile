@@ -1,4 +1,4 @@
-FROM node:24-bookworm-slim
+FROM node:26-bookworm-slim
 
 ARG T3_VERSION=latest
 ARG T3_BUILD_NUMBER=1

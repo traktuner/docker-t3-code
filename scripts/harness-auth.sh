@@ -17,6 +17,12 @@ Usage:
   t3-auth grok login           # xAI/Grok included usage via device auth
   t3-auth grok env             # report env-based Grok auth presence
 
+  t3-auth gh login             # GitHub CLI browser/device auth
+  t3-auth gh token             # persist GH_TOKEN or GITHUB_TOKEN
+  t3-auth gh status
+  t3-auth gh setup-git         # configure git credential integration
+  t3-auth gh logout
+
 API keys are intentionally not the default login path because they normally use
 API billing instead of included subscription usage.
 USAGE
@@ -102,6 +108,55 @@ case "$provider" in
           echo "GROK_DEPLOYMENT_KEY is set."
         else
           echo "No Grok env auth found. Use t3-auth grok login for device auth."
+          exit 1
+        fi
+        ;;
+      *)
+        usage >&2
+        exit 2
+        ;;
+    esac
+    ;;
+  gh|github)
+    export HOME="${HOME:-/data/home}"
+    export XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
+    export XDG_DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}"
+    export XDG_CACHE_HOME="${XDG_CACHE_HOME:-$HOME/.cache}"
+    mkdir -p "$XDG_CONFIG_HOME/gh" "$XDG_DATA_HOME" "$XDG_CACHE_HOME"
+    gh_host="${GH_HOST:-${GITHUB_HOST:-github.com}}"
+    gh_git_protocol="${GH_GIT_PROTOCOL:-ssh}"
+    case "$action" in
+      login)
+        exec gh auth login --hostname "$gh_host" --git-protocol "$gh_git_protocol" --web
+        ;;
+      token|with-token)
+        if [[ -n "${GH_TOKEN:-}" ]]; then
+          printenv GH_TOKEN | env -u GH_TOKEN -u GITHUB_TOKEN gh auth login --hostname "$gh_host" --with-token
+          exit $?
+        elif [[ -n "${GITHUB_TOKEN:-}" ]]; then
+          printenv GITHUB_TOKEN | env -u GH_TOKEN -u GITHUB_TOKEN gh auth login --hostname "$gh_host" --with-token
+          exit $?
+        else
+          echo "GH_TOKEN or GITHUB_TOKEN is not set." >&2
+          exit 1
+        fi
+        ;;
+      status)
+        exec gh auth status --hostname "$gh_host"
+        ;;
+      setup-git)
+        exec gh auth setup-git --hostname "$gh_host"
+        ;;
+      logout)
+        exec gh auth logout --hostname "$gh_host"
+        ;;
+      env)
+        if [[ -n "${GH_TOKEN:-}" ]]; then
+          echo "GH_TOKEN is set; gh can use env-based auth."
+        elif [[ -n "${GITHUB_TOKEN:-}" ]]; then
+          echo "GITHUB_TOKEN is set; gh can use env-based auth."
+        else
+          echo "No GitHub env auth found. Use t3-auth gh login or t3-auth gh token."
           exit 1
         fi
         ;;

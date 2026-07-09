@@ -1,6 +1,6 @@
 # Dockerized T3 Code
 
-This container runs the current `t3` web/headless server. All T3 Code upstream provider CLIs are baked into the image: Codex, Claude Code, Cursor Agent, Grok Build, OpenCode, and a bootstrap T3 CLI. Only T3 itself updates at runtime by default.
+This container runs the current `t3` web/headless server. All T3 Code upstream provider CLIs are baked into the image: Codex, Claude Code, Cursor Agent, Grok Build, OpenCode, and a bootstrap T3 CLI. The image also includes `git`, `ssh`, `rsync`, and the GitHub CLI (`gh`) for normal repository work from inside the container. Only T3 itself updates at runtime by default.
 
 ## What It Does
 
@@ -170,6 +170,7 @@ Then put the numeric output of `id -u` and `id -g` into `T3_UID` and `T3_GID` in
 
 - Codex uses `CODEX_HOME = /data/codex`. For included ChatGPT/Codex usage, use `t3-auth codex login` / `codex login --device-auth`. API-key auth is available but uses API billing.
 - Claude Code uses `/data/claude-home` for the provider process. Use `ANTHROPIC_API_KEY` for API-billed automation, or `CLAUDE_CODE_OAUTH_TOKEN` from `claude setup-token` for subscription-backed CI/container use.
+- GitHub CLI auth lives under `/data/home/.config/gh`. Use `t3-auth gh login` for the browser/device flow, `t3-auth gh token` to persist `GH_TOKEN`/`GITHUB_TOKEN`, and `t3-auth gh setup-git` when you want `git` to use the GitHub CLI credential helper.
 - Cursor Agent is installed from the official Cursor installer. Its binary is exposed as both `agent` and `cursor-agent`; T3's default Cursor binary path remains `agent`.
 - Grok Build is installed from the official xAI installer. Only the `grok` binary is exposed in `/usr/local/bin` so it does not shadow Cursor's `agent` command. For containers, use `XAI_API_KEY` or `grok login --device-auth`; persisted Grok config/session state lives in `/data/home/.grok`.
 - OpenCode can either be spawned by T3 or started by the container wrapper as a managed local server. Use the managed server mode when you need an explicit OpenCode config file, because T3's native OpenCode spawn path controls the spawned server environment.
@@ -188,6 +189,8 @@ docker exec -it t3code t3-auth codex login
 docker exec -it t3code t3-auth claude login
 docker exec -it t3code agent login
 docker exec -it t3code t3-auth grok login
+docker exec -it t3code t3-auth gh login
+docker exec -it t3code t3-auth gh setup-git
 ```
 
 Use API keys only when you intentionally want API-billed usage:
@@ -196,4 +199,5 @@ Use API keys only when you intentionally want API-billed usage:
 docker exec -it t3code t3-auth codex api-key
 docker exec -it t3code t3-auth claude env
 docker exec -it t3code t3-auth grok env
+docker exec -it t3code t3-auth gh token
 ```

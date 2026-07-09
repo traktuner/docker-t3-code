@@ -137,6 +137,10 @@ services:
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       GOOGLE_GENERATIVE_AI_API_KEY: ${GOOGLE_GENERATIVE_AI_API_KEY:-}
       XAI_API_KEY: ${XAI_API_KEY:-}
+      GH_HOST: ${GH_HOST:-github.com}
+      GH_GIT_PROTOCOL: ${GH_GIT_PROTOCOL:-ssh}
+      GH_TOKEN: ${GH_TOKEN:-}
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
 
     volumes:
       # Read-only static container config.

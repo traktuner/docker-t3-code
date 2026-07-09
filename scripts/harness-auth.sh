@@ -23,6 +23,11 @@ Usage:
   t3-auth gh setup-git         # configure git credential integration
   t3-auth gh logout
 
+  t3-auth opencode mcp-list
+  t3-auth opencode mcp-auth cloudflare
+  t3-auth opencode mcp-debug cloudflare
+  t3-auth opencode mcp-logout cloudflare
+
 API keys are intentionally not the default login path because they normally use
 API billing instead of included subscription usage.
 USAGE
@@ -159,6 +164,36 @@ case "$provider" in
           echo "No GitHub env auth found. Use t3-auth gh login or t3-auth gh token."
           exit 1
         fi
+        ;;
+      *)
+        usage >&2
+        exit 2
+        ;;
+    esac
+    ;;
+  opencode)
+    export HOME="${HOME:-/data/home}"
+    export XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
+    export XDG_DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}"
+    export XDG_CACHE_HOME="${XDG_CACHE_HOME:-$HOME/.cache}"
+    export OPENCODE_CONFIG_DIR="${OPENCODE_CONFIG_DIR:-$XDG_CONFIG_HOME/opencode}"
+    if [[ -n "${T3_OPENCODE_CONFIG:-}" ]]; then
+      export OPENCODE_CONFIG="$T3_OPENCODE_CONFIG"
+    fi
+    mkdir -p "$OPENCODE_CONFIG_DIR" "$XDG_DATA_HOME" "$XDG_CACHE_HOME"
+    mcp_server="${3:-cloudflare}"
+    case "$action" in
+      mcp-list)
+        exec opencode mcp list
+        ;;
+      mcp-auth)
+        exec opencode mcp auth "$mcp_server"
+        ;;
+      mcp-debug)
+        exec opencode mcp debug "$mcp_server"
+        ;;
+      mcp-logout)
+        exec opencode mcp logout "$mcp_server"
         ;;
       *)
         usage >&2

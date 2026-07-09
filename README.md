@@ -142,6 +142,23 @@ T3_GROK_CONFIG_DIR_SOURCE=/config/grok
 
 OpenCode syncs with `--delete` so the mounted config is authoritative. Codex, Claude, and Grok sync without delete so persisted login/session files are not removed. Keep secrets out of these directories when possible; use environment references such as `{env:LUMO_API_KEY}` in `opencode.jsonc`.
 
+Cloudflare's official OpenCode MCP set is provisioned into the writable runtime OpenCode config by default:
+
+```bash
+T3_OPENCODE_CLOUDFLARE_MCP=1
+```
+
+This adds `cloudflare`, `cloudflare-docs`, `cloudflare-bindings`, `cloudflare-builds`, and `cloudflare-observability` when missing. Existing entries are left unchanged. Set `T3_OPENCODE_CLOUDFLARE_MCP=0` to opt out.
+
+Additional OpenCode MCP servers can be provisioned generically by environment variable or mounted JSON file. The value can be either the direct `"mcp"` object or an object containing `"mcp"`:
+
+```bash
+T3_OPENCODE_MCP_SERVERS_JSON='{"my-remote-mcp":{"type":"remote","url":"https://example.com/mcp","enabled":true,"oauth":{}}}'
+T3_OPENCODE_MCP_SERVERS_FILE=/config/opencode-mcp.json
+```
+
+Provisioning is merge-only: if a server name already exists in the runtime OpenCode config, the existing entry is left untouched. Mount `/config/opencode` when you want the whole OpenCode config to be authoritative.
+
 T3 model pickers can be filtered without changing provider configs:
 
 ```bash
@@ -191,7 +208,26 @@ docker exec -it t3code agent login
 docker exec -it t3code t3-auth grok login
 docker exec -it t3code t3-auth gh login
 docker exec -it t3code t3-auth gh setup-git
+docker exec -it t3code t3-auth opencode mcp-list
 ```
+
+For MCP OAuth from a Docker host, do not run a browser-based auth command through plain `docker exec` from your laptop when it redirects to `127.0.0.1`. That loopback address is the browser machine, not the container. Use the included SSH helper from your workstation instead:
+
+```bash
+bash scripts/t3code-mcp-auth-over-ssh.sh slvpdocker01 cloudflare
+bash scripts/t3code-mcp-auth-over-ssh.sh slvpdocker01 cloudflare-bindings
+```
+
+The helper keeps the browser callback on local `127.0.0.1:19876`, tunnels it over SSH, and forwards it into the container network namespace only for the duration of the auth command.
+
+For other MCP auth commands that use the same loopback callback pattern, pass the container command after `--` and set `T3_MCP_OAUTH_PORT` if the CLI uses a different callback port:
+
+```bash
+bash scripts/t3code-mcp-auth-over-ssh.sh slvpdocker01 -- t3-auth opencode mcp-auth cloudflare
+T3_MCP_OAUTH_PORT=19876 bash scripts/t3code-mcp-auth-over-ssh.sh slvpdocker01 -- codex mcp login cloudflare
+```
+
+`scripts/t3code-opencode-mcp-auth-over-ssh.sh` remains as a compatibility wrapper for the OpenCode-specific name.
 
 Use API keys only when you intentionally want API-billed usage:
 

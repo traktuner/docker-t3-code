@@ -84,6 +84,36 @@ provision_opencode_config_dir() {
   printf '%s\n' "$digest" > "$stamp"
 }
 
+provision_opencode_cloudflare_mcp() {
+  if [[ "${T3_OPENCODE_CLOUDFLARE_MCP:-1}" == "0" ]]; then
+    return 0
+  fi
+
+  local config_path="${T3_OPENCODE_CONFIG:-}"
+  local target_dir="${OPENCODE_CONFIG_DIR:-$XDG_CONFIG_HOME/opencode}"
+  if [[ -z "$config_path" ]]; then
+    config_path="$target_dir/opencode.jsonc"
+  fi
+
+  if [[ -e "$config_path" && ! -w "$config_path" ]]; then
+    local generated_config="$target_dir/opencode.jsonc"
+    echo "OpenCode config $config_path is not writable; copying to $generated_config for Cloudflare MCP defaults."
+    mkdir -p "$target_dir"
+    if [[ "$config_path" != "$generated_config" ]]; then
+      cp "$config_path" "$generated_config"
+    fi
+    config_path="$generated_config"
+    export T3_OPENCODE_CONFIG="$generated_config"
+  fi
+
+  if [[ ! -e "$config_path" ]]; then
+    mkdir -p "$(dirname "$config_path")"
+    printf '{\n  "$schema": "https://opencode.ai/config.json"\n}\n' > "$config_path"
+  fi
+
+  node /opt/t3-docker/provision-opencode-mcp.mjs "$config_path"
+}
+
 provision_optional_config_dir() {
   local label="$1"
   local source="$2"
@@ -128,6 +158,7 @@ provision_provider_config_dirs() {
   fi
 
   provision_opencode_config_dir
+  provision_opencode_cloudflare_mcp
   provision_optional_config_dir "Codex" "$codex_source" "${CODEX_HOME:-/data/codex}" "${T3_PROVIDER_CODEX:-1}"
   provision_optional_config_dir "Claude" "$claude_source" "${T3_CLAUDE_HOME_PATH:-/data/claude-home}" "${T3_PROVIDER_CLAUDE:-1}"
   provision_optional_config_dir "Grok" "$grok_source" "${GROK_CONFIG_DIR:-$HOME/.grok}" "${T3_PROVIDER_GROK:-1}"

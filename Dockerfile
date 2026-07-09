@@ -74,8 +74,9 @@ COPY --chown=t3:t3 scripts/entrypoint.sh /opt/t3-docker/entrypoint.sh
 COPY --chown=t3:t3 scripts/healthcheck.sh /opt/t3-docker/healthcheck.sh
 COPY --chown=t3:t3 scripts/auth-proxy.mjs /opt/t3-docker/auth-proxy.mjs
 COPY --chown=t3:t3 scripts/harness-auth.sh /opt/t3-docker/harness-auth.sh
+COPY --chown=t3:t3 scripts/provision-opencode-mcp.mjs /opt/t3-docker/provision-opencode-mcp.mjs
 
-RUN chmod +x /opt/t3-docker/render-config.py /opt/t3-docker/entrypoint.sh /opt/t3-docker/healthcheck.sh /opt/t3-docker/auth-proxy.mjs /opt/t3-docker/harness-auth.sh \
+RUN chmod +x /opt/t3-docker/render-config.py /opt/t3-docker/entrypoint.sh /opt/t3-docker/healthcheck.sh /opt/t3-docker/auth-proxy.mjs /opt/t3-docker/harness-auth.sh /opt/t3-docker/provision-opencode-mcp.mjs \
     && ln -s /opt/t3-docker/harness-auth.sh /usr/local/bin/t3-auth
 
 ARG T3_BUILD_NUMBER=1

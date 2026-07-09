@@ -88,12 +88,17 @@ provision_optional_config_dir() {
   local label="$1"
   local source="$2"
   local target="$3"
+  local enabled="${4:-1}"
 
   if [[ -z "$source" ]]; then
     return 0
   fi
 
   if [[ ! -d "$source" ]]; then
+    if [[ "$enabled" != "1" ]]; then
+      echo "${label} config source points to a missing directory but ${label} is disabled: $source" >&2
+      return 0
+    fi
     echo "${label} config source points to a missing directory: $source" >&2
     exit 1
   fi
@@ -123,9 +128,9 @@ provision_provider_config_dirs() {
   fi
 
   provision_opencode_config_dir
-  provision_optional_config_dir "Codex" "$codex_source" "${CODEX_HOME:-/data/codex}"
-  provision_optional_config_dir "Claude" "$claude_source" "${T3_CLAUDE_HOME_PATH:-/data/claude-home}"
-  provision_optional_config_dir "Grok" "$grok_source" "${GROK_CONFIG_DIR:-$HOME/.grok}"
+  provision_optional_config_dir "Codex" "$codex_source" "${CODEX_HOME:-/data/codex}" "${T3_PROVIDER_CODEX:-1}"
+  provision_optional_config_dir "Claude" "$claude_source" "${T3_CLAUDE_HOME_PATH:-/data/claude-home}" "${T3_PROVIDER_CLAUDE:-1}"
+  provision_optional_config_dir "Grok" "$grok_source" "${GROK_CONFIG_DIR:-$HOME/.grok}" "${T3_PROVIDER_GROK:-1}"
 }
 
 install_npm_latest() {

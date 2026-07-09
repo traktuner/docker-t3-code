@@ -139,38 +139,45 @@ jobs:
             }
           }
 
-          const versions = await listExistingTags();
-          const tags = versions.flatMap((version) => version.metadata?.container?.tags ?? []);
-          const versionPattern = new RegExp(`^${escapeRegExp(t3Version)}-(\\d+)$`);
-          const buildNumbers = tags.flatMap((tag) => {
-            const match = versionPattern.exec(tag);
-            return match ? [Number.parseInt(match[1], 10)] : [];
+          async function main() {
+            const versions = await listExistingTags();
+            const tags = versions.flatMap((version) => version.metadata?.container?.tags ?? []);
+            const versionPattern = new RegExp(`^${escapeRegExp(t3Version)}-(\\d+)$`);
+            const buildNumbers = tags.flatMap((tag) => {
+              const match = versionPattern.exec(tag);
+              return match ? [Number.parseInt(match[1], 10)] : [];
+            });
+            const maxBuildNumber = buildNumbers.length > 0 ? Math.max(...buildNumbers) : 0;
+            const buildNumber =
+              requestedBuildNumber && requestedBuildNumber.trim().length > 0
+                ? Number.parseInt(requestedBuildNumber, 10)
+                : maxBuildNumber + 1;
+
+            if (!Number.isInteger(buildNumber) || buildNumber < 1) {
+              throw new Error(`Invalid build number: ${requestedBuildNumber}`);
+            }
+
+            const shouldBuild = eventName !== "schedule" || maxBuildNumber === 0;
+            const imageVersion = `${t3Version}-${buildNumber}`;
+            const outputs = {
+              t3_version: t3Version,
+              build_number: String(buildNumber),
+              image_version: imageVersion,
+              should_build: String(shouldBuild),
+            };
+
+            for (const [key, value] of Object.entries(outputs)) {
+              fs.appendFileSync(process.env.GITHUB_OUTPUT, `${key}=${value}\n`);
+            }
+            console.log(`T3 stable version: ${t3Version}`);
+            console.log(`Image version tag: ${imageVersion}`);
+            console.log(`Scheduled build needed: ${shouldBuild}`);
+          }
+
+          main().catch((error) => {
+            console.error(error);
+            process.exit(1);
           });
-          const maxBuildNumber = buildNumbers.length > 0 ? Math.max(...buildNumbers) : 0;
-          const buildNumber =
-            requestedBuildNumber && requestedBuildNumber.trim().length > 0
-              ? Number.parseInt(requestedBuildNumber, 10)
-              : maxBuildNumber + 1;
-
-          if (!Number.isInteger(buildNumber) || buildNumber < 1) {
-            throw new Error(`Invalid build number: ${requestedBuildNumber}`);
-          }
-
-          const shouldBuild = eventName !== "schedule" || maxBuildNumber === 0;
-          const imageVersion = `${t3Version}-${buildNumber}`;
-          const outputs = {
-            t3_version: t3Version,
-            build_number: String(buildNumber),
-            image_version: imageVersion,
-            should_build: String(shouldBuild),
-          };
-
-          for (const [key, value] of Object.entries(outputs)) {
-            fs.appendFileSync(process.env.GITHUB_OUTPUT, `${key}=${value}\n`);
-          }
-          console.log(`T3 stable version: ${t3Version}`);
-          console.log(`Image version tag: ${imageVersion}`);
-          console.log(`Scheduled build needed: ${shouldBuild}`);
           NODE
 
       - name: Log in to GHCR

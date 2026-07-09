@@ -218,7 +218,7 @@ bash scripts/t3code-mcp-auth-over-ssh.sh slvpdocker01 cloudflare
 bash scripts/t3code-mcp-auth-over-ssh.sh slvpdocker01 cloudflare-bindings
 ```
 
-The helper keeps the browser callback on local `127.0.0.1:19876`, tunnels it over SSH, and forwards it into the container network namespace only for the duration of the auth command.
+The helper keeps the browser callback on local `127.0.0.1:19876` and forwards each callback connection through normal SSH command sessions into the container network namespace. It does not require `ssh -L` or `AllowTcpForwarding` on the Docker host.
 
 For other MCP auth commands that use the same loopback callback pattern, pass the container command after `--` and set `T3_MCP_OAUTH_PORT` if the CLI uses a different callback port:
 

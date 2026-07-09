@@ -6,3 +6,5 @@ config/t3code.toml
 .env
 *.log
 node_modules
+__pycache__
+scripts/__pycache__

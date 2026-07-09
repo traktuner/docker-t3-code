@@ -5,6 +5,7 @@ This container runs the current `t3` web/headless server. All T3 Code upstream p
 ## What It Does
 
 - Starts `t3 serve` in the container on `0.0.0.0:3773`; Docker controls external exposure through `T3_BIND_ADDRESS`.
+- Can expose T3 through an optional auth proxy. The proxy uses T3's native local auth control plane to create a short-lived one-time pairing credential and immediately exchanges it for a browser-session cookie, so trusted reverse-proxy deployments can open directly without the pairing screen.
 - Installs or updates `t3` at container startup when enabled. Provider CLIs are installed in the image and are not updated at runtime unless explicitly enabled.
 - Renders T3 provider settings from `config/t3code.toml` and environment variables.
 - Adds `/workspace` as a T3 project at startup when `auto_bootstrap_project_from_cwd` is enabled.
@@ -31,7 +32,18 @@ The workflow in `.github/workflows/container.yml` builds `linux/amd64` and `linu
 ghcr.io/<owner>/<repo>
 ```
 
-It runs on pushes to `main`/`master`, version tags like `v1.2.3`, manual dispatch, and weekly schedule. Pull requests build without pushing.
+It runs on pushes to `main`/`master`, manual dispatch, and a daily schedule. Pull requests build without pushing. Scheduled builds read the stable npm `t3` dist-tag and only publish when no image tag exists for that T3 version yet.
+
+Published tags include:
+
+```text
+latest
+main
+sha-<git-sha>
+<t3-version>-<image-build-number>
+```
+
+For example, when npm `t3@latest` is `0.0.28`, the first image build for that upstream version is tagged `0.0.28-1`.
 
 After publishing, set this in `.env` if you want Compose to use the pushed image tag instead of a local name:
 
@@ -40,6 +52,19 @@ T3_IMAGE=ghcr.io/<owner>/<repo>:latest
 ```
 
 T3 itself still updates inside the running container: `T3_UPDATE_T3=1` is enabled by default and installs `t3@latest` into `/data/npm-global` on startup. Provider CLI runtime updates are disabled by default with `T3_UPDATE_CODEX=0`, `T3_UPDATE_CLAUDE=0`, `T3_UPDATE_CURSOR=0`, `T3_UPDATE_GROK=0`, and `T3_UPDATE_OPENCODE=0`.
+
+## Direct Browser Access
+
+T3's native `t3 serve` mode expects remote browsers to pair. For a trusted deployment behind your own private reverse proxy, enable the container auth proxy:
+
+```bash
+T3_AUTH_PROXY=1
+T3_AUTH_PROXY_INTERNAL_HOST=127.0.0.1
+T3_AUTH_PROXY_INTERNAL_PORT=13773
+T3_AUTH_PROXY_ADMIN_TTL=2m
+```
+
+With this mode, T3 listens only on the internal host/port and the proxy listens on `T3_SERVER_PORT`. The proxy does not patch T3 and does not use an `unsafe-no-auth` flag; it creates a short-lived local admin bearer session, uses T3's own pairing-token API to mint an administrative browser pairing credential, and immediately consumes that credential for the browser cookie.
 
 ## Compose Layouts
 

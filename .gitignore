@@ -2,3 +2,5 @@
 data/
 workspace/
 config/t3code.toml
+__pycache__/
+scripts/__pycache__/

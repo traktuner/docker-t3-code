@@ -108,6 +108,86 @@ start_managed_opencode_server() {
   echo "Managed OpenCode server did not answer readiness probe; T3 will still try http://${host}:${port}." >&2
 }
 
+wait_for_http_ready() {
+  local url="$1"
+  local label="$2"
+  local attempts="${3:-120}"
+
+  for _ in $(seq 1 "$attempts"); do
+    if curl --connect-timeout 1 --max-time 2 -fsS "$url" >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 0.5
+  done
+
+  echo "$label did not become ready at $url." >&2
+  return 1
+}
+
+run_t3_foreground() {
+  local -a args=(
+    serve
+    --host "$T3_SERVER_HOST"
+    --port "$T3_SERVER_PORT"
+    --base-dir "$T3CODE_HOME"
+  )
+
+  args+=("$T3_WORKDIR")
+
+  echo "Starting T3 Code on http://${T3_SERVER_HOST}:${T3_SERVER_PORT} with workdir ${T3_WORKDIR}"
+  exec t3 "${args[@]}"
+}
+
+run_t3_with_auth_proxy() {
+  local listen_host="$T3_SERVER_HOST"
+  local listen_port="$T3_SERVER_PORT"
+  local upstream_host="${T3_AUTH_PROXY_INTERNAL_HOST:-127.0.0.1}"
+  local upstream_port="${T3_AUTH_PROXY_INTERNAL_PORT:-13773}"
+  local -a args=(
+    serve
+    --host "$upstream_host"
+    --port "$upstream_port"
+    --base-dir "$T3CODE_HOME"
+    "$T3_WORKDIR"
+  )
+
+  echo "Starting T3 Code internal backend on http://${upstream_host}:${upstream_port} with workdir ${T3_WORKDIR}"
+  t3 "${args[@]}" &
+  local t3_pid="$!"
+  local proxy_pid=""
+
+  cleanup_children() {
+    if [[ -n "${t3_pid:-}" ]]; then
+      kill "$t3_pid" >/dev/null 2>&1 || true
+      wait "$t3_pid" >/dev/null 2>&1 || true
+    fi
+    if [[ -n "${proxy_pid:-}" ]]; then
+      kill "$proxy_pid" >/dev/null 2>&1 || true
+      wait "$proxy_pid" >/dev/null 2>&1 || true
+    fi
+  }
+  trap cleanup_children TERM INT
+
+  if ! wait_for_http_ready "http://${upstream_host}:${upstream_port}/api/auth/session" "T3 Code internal backend"; then
+    cleanup_children
+    exit 1
+  fi
+
+  echo "Starting T3 auth proxy on http://${listen_host}:${listen_port}"
+  T3_AUTH_PROXY_LISTEN_HOST="$listen_host" \
+    T3_AUTH_PROXY_LISTEN_PORT="$listen_port" \
+    T3_AUTH_PROXY_UPSTREAM_HOST="$upstream_host" \
+    T3_AUTH_PROXY_UPSTREAM_PORT="$upstream_port" \
+    T3_AUTH_PROXY_ADMIN_TTL="${T3_AUTH_PROXY_ADMIN_TTL:-2m}" \
+    node /opt/t3-docker/auth-proxy.mjs &
+  proxy_pid="$!"
+
+  wait -n "$t3_pid" "$proxy_pid"
+  local exit_code="$?"
+  cleanup_children
+  exit "$exit_code"
+}
+
 if [[ "${T3_AUTO_UPDATE_EFFECTIVE:-1}" == "1" ]]; then
   install_npm_latest "${T3_UPDATE_T3:-1}" "t3" "T3 Code" "t3"
   install_npm_latest "${T3_UPDATE_CODEX:-0}" "@openai/codex" "Codex CLI" "codex"
@@ -142,14 +222,8 @@ if [[ "${T3_AUTO_BOOTSTRAP_PROJECT_FROM_CWD:-1}" == "1" ]]; then
   fi
 fi
 
-args=(
-  serve
-  --host "$T3_SERVER_HOST"
-  --port "$T3_SERVER_PORT"
-  --base-dir "$T3CODE_HOME"
-)
-
-args+=("$T3_WORKDIR")
-
-echo "Starting T3 Code on http://${T3_SERVER_HOST}:${T3_SERVER_PORT} with workdir ${T3_WORKDIR}"
-exec t3 "${args[@]}"
+if [[ "${T3_AUTH_PROXY:-0}" == "1" ]]; then
+  run_t3_with_auth_proxy
+else
+  run_t3_foreground
+fi

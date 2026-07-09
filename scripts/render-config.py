@@ -213,6 +213,7 @@ def main():
     config = read_toml(config_path)
 
     server = config.get("server", {})
+    auth = config.get("auth", {})
     updates = config.get("updates", {})
     providers = config.get("providers", {})
 
@@ -231,6 +232,16 @@ def main():
         server,
         "auto_bootstrap_project_from_cwd",
         True,
+    )
+    auth_proxy = env_or_cfg_bool("T3_AUTH_PROXY", auth, "proxy", False)
+    auth_proxy_internal_host = str(
+        env_or_cfg("T3_AUTH_PROXY_INTERNAL_HOST", auth, "internal_host", "127.0.0.1")
+    )
+    auth_proxy_internal_port = int(
+        env_or_cfg("T3_AUTH_PROXY_INTERNAL_PORT", auth, "internal_port", 13773)
+    )
+    auth_proxy_admin_ttl = str(
+        env_or_cfg("T3_AUTH_PROXY_ADMIN_TTL", auth, "admin_ttl", "2m")
     )
 
     codex_enabled = provider_enabled(config, "codex", "T3_PROVIDER_CODEX", True)
@@ -456,6 +467,10 @@ def main():
         "T3_SERVER_PORT": str(server_port),
         "T3_WORKDIR": workdir,
         "T3_AUTO_BOOTSTRAP_PROJECT_FROM_CWD": "1" if auto_bootstrap else "0",
+        "T3_AUTH_PROXY": "1" if auth_proxy else "0",
+        "T3_AUTH_PROXY_INTERNAL_HOST": auth_proxy_internal_host,
+        "T3_AUTH_PROXY_INTERNAL_PORT": str(auth_proxy_internal_port),
+        "T3_AUTH_PROXY_ADMIN_TTL": auth_proxy_admin_ttl,
         "T3_AUTO_UPDATE_EFFECTIVE": "1" if auto_update else "0",
         "T3_UPDATE_T3": "1" if env_or_cfg_bool("T3_UPDATE_T3", updates, "t3", True) else "0",
         "T3_UPDATE_CODEX": "1" if provider_update_enabled(updates, "codex", codex_enabled, install_disabled) else "0",

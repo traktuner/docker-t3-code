@@ -31,7 +31,6 @@ RUN apt-get update \
       dumb-init \
       fd-find \
       git \
-      gnupg \
       jq \
       openssh-client \
       procps \
@@ -39,14 +38,6 @@ RUN apt-get update \
       ripgrep \
       rsync \
       tini \
-    && mkdir -p -m 0755 /etc/apt/keyrings \
-    && curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
-      -o /etc/apt/keyrings/githubcli-archive-keyring.gpg \
-    && chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg \
-    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
-      > /etc/apt/sources.list.d/github-cli.list \
-    && apt-get update \
-    && apt-get install -y --no-install-recommends gh \
     && rm -rf /var/lib/apt/lists/*
 
 RUN npm install -g npm@latest \
@@ -63,6 +54,18 @@ COPY scripts/install-provider-clis.sh /opt/t3-docker/install-provider-clis.sh
 RUN chmod +x /opt/t3-docker/install-provider-clis.sh \
     && T3_VERSION="${T3_VERSION}" /opt/t3-docker/install-provider-clis.sh \
     && chown -R t3:t3 /data
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends gnupg \
+    && mkdir -p -m 0755 /etc/apt/keyrings \
+    && curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
+      -o /etc/apt/keyrings/githubcli-archive-keyring.gpg \
+    && chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg \
+    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
+      > /etc/apt/sources.list.d/github-cli.list \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends gh \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY --chown=t3:t3 scripts/render-config.py /opt/t3-docker/render-config.py
 COPY --chown=t3:t3 scripts/entrypoint.sh /opt/t3-docker/entrypoint.sh

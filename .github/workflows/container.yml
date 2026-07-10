@@ -74,7 +74,8 @@ jobs:
             scripts/auth-proxy.mjs scripts/configure-cursor-mcp.mjs \
             scripts/mcp-auth-helper.mjs scripts/provision-opencode-mcp.mjs \
             scripts/t3-sandbox-mcp.mjs scripts/t3-xcode-mcp.mjs \
-            scripts/github-issue-worker-lib.mjs scripts/github-issue-worker.mjs
+            scripts/github-issue-worker-lib.mjs scripts/github-issue-worker.mjs \
+            scripts/t3-sandbox-only-plugin.js
           node --test tests/*.test.mjs
           T3_SANDBOX_HOST_WORKSPACE_ROOT=/tmp/workspaces \
             python3 sandbox/render-opensandbox-config.py \

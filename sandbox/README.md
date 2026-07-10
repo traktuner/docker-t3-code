@@ -143,7 +143,9 @@ removed by OpenSandbox.
 When `T3_OPENCODE_SANDBOX_INSTRUCTIONS=1`, the main container adds a managed
 global OpenCode instruction file describing this lifecycle. With
 `T3_OPENCODE_SANDBOX_ONLY=1`, local read/edit/search/shell/subagent tools are
-denied and the agent must perform repository work through `t3-sandbox`.
+denied both by configuration and by a pre-execution plugin, so agent-level
+permission overrides cannot bypass the boundary. The agent must perform
+repository work through `t3-sandbox`.
 
 ## Configuration
 

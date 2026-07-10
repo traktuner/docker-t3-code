@@ -158,8 +158,10 @@ the model discovers and uses the sandbox without a per-chat prompt. Set
 `T3_OPENCODE_SANDBOX_INSTRUCTIONS=0` to disable that behavior. Set
 `T3_OPENCODE_SANDBOX_ONLY=1` to deny OpenCode's local filesystem, shell, edit,
 and subagent tools while keeping sandbox, Xcode, and independently configured
-remote MCP tools available. This is enabled by default in the production infra
-example, but remains opt-in in the generic Compose files.
+remote MCP tools available. A managed `tool.execute.before` plugin enforces the
+boundary even when a custom agent contains a broader `permission: allow` rule.
+This is enabled by default in the production infra example, but remains opt-in
+in the generic Compose files.
 See [`sandbox/README.md`](sandbox/README.md) for the lifecycle, security model,
 Dev Container subset, and complete configuration.
 

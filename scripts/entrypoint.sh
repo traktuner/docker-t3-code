@@ -205,6 +205,14 @@ provision_opencode_mcp() {
     unset T3_OPENCODE_SANDBOX_INSTRUCTIONS_FILE
   fi
 
+  local sandbox_plugin="$target_dir/plugins/t3-sandbox-only.js"
+  if [[ "${T3_OPENCODE_SANDBOX_ONLY:-0}" == "1" ]]; then
+    mkdir -p "$(dirname "$sandbox_plugin")"
+    install -m 0600 /opt/t3-docker/t3-sandbox-only-plugin.js "$sandbox_plugin"
+  else
+    rm -f "$sandbox_plugin"
+  fi
+
   node /opt/t3-docker/provision-opencode-mcp.mjs "$config_path"
 
   if [[ "${T3_OPENCODE_MCP_PRESERVE_FILE_GENERATED:-0}" == "1" ]]; then

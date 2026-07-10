@@ -108,6 +108,9 @@ export T3_SANDBOX_MCP_RECONCILE=1
 install -m 0600 \
   /opt/t3-docker/t3-sandbox-instructions.md \
   "$OPENCODE_CONFIG_DIR/t3-sandbox-instructions.md"
+install -D -m 0600 \
+  /opt/t3-docker/t3-sandbox-only-plugin.js \
+  "$OPENCODE_CONFIG_DIR/plugins/t3-sandbox-only.js"
 export T3_OPENCODE_SANDBOX_INSTRUCTIONS_FILE="$OPENCODE_CONFIG_DIR/t3-sandbox-instructions.md"
 export T3_OPENCODE_SANDBOX_ONLY="${T3_OPENCODE_SANDBOX_ONLY:-1}"
 node /opt/t3-docker/provision-opencode-mcp.mjs "$config_path"

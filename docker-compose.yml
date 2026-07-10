@@ -5,10 +5,9 @@ services:
     image: ${T3_IMAGE:-local/t3code:latest}
     container_name: t3code
     restart: unless-stopped
-    group_add:
-      - "${T3_WORKSPACE_GID:-3001}"
     ports:
       - "${T3_BIND_ADDRESS:-127.0.0.1}:${T3_PORT:-3773}:${T3_SERVER_PORT:-3773}"
+      - "${T3_AUTH_WEB_HELPER_BIND_ADDRESS:-127.0.0.1}:${T3_AUTH_WEB_HELPER_HOST_PORT:-3774}:${T3_AUTH_WEB_HELPER_PORT:-13774}"
     environment:
       T3CODE_CONFIG_PATH: /config/t3code.toml
       T3CODE_HOME: /data/t3
@@ -21,6 +20,11 @@ services:
       T3_AUTH_PROXY_INTERNAL_HOST: ${T3_AUTH_PROXY_INTERNAL_HOST:-127.0.0.1}
       T3_AUTH_PROXY_INTERNAL_PORT: ${T3_AUTH_PROXY_INTERNAL_PORT:-13773}
       T3_AUTH_PROXY_ADMIN_TTL: ${T3_AUTH_PROXY_ADMIN_TTL:-2m}
+      T3_AUTH_WEB_HELPER: ${T3_AUTH_WEB_HELPER:-0}
+      T3_AUTH_WEB_HELPER_HOST: ${T3_AUTH_WEB_HELPER_HOST:-0.0.0.0}
+      T3_AUTH_WEB_HELPER_PORT: ${T3_AUTH_WEB_HELPER_PORT:-13774}
+      T3_AUTH_WEB_HELPER_TOKEN: ${T3_AUTH_WEB_HELPER_TOKEN:-}
+      T3_AUTH_WEB_HELPER_COMMANDS_JSON: ${T3_AUTH_WEB_HELPER_COMMANDS_JSON:-}
       T3_AUTO_UPDATE: ${T3_AUTO_UPDATE:-1}
       T3_UPDATE_T3: ${T3_UPDATE_T3:-1}
       T3_UPDATE_CODEX: ${T3_UPDATE_CODEX:-0}
@@ -89,9 +93,28 @@ services:
       T3_OPENCODE_MODEL_ORDER: ${T3_OPENCODE_MODEL_ORDER:-}
       T3_OPENCODE_ENV_JSON: ${T3_OPENCODE_ENV_JSON:-}
       T3_OPENCODE_CLOUDFLARE_MCP: ${T3_OPENCODE_CLOUDFLARE_MCP:-1}
+      T3_OPENCODE_CLOUDFLARE_AUTH: ${T3_OPENCODE_CLOUDFLARE_AUTH:-auto}
+      T3_OPENCODE_MCP_PRESETS: ${T3_OPENCODE_MCP_PRESETS:-context7}
       T3_OPENCODE_MCP_SERVERS_JSON: ${T3_OPENCODE_MCP_SERVERS_JSON:-}
       T3_OPENCODE_MCP_SERVERS_FILE: ${T3_OPENCODE_MCP_SERVERS_FILE:-}
+      T3_SANDBOX_URL: ${T3_SANDBOX_URL:-}
+      T3_SANDBOX_TOKEN: ${T3_SANDBOX_TOKEN:-}
+      T3_SANDBOX_TOKEN_FILE: ${T3_SANDBOX_TOKEN_FILE:-}
+      T3_SANDBOX_MCP_RECONCILE: ${T3_SANDBOX_MCP_RECONCILE:-1}
+      T3_XCODE_SSH_HOST: ${T3_XCODE_SSH_HOST:-}
+      T3_XCODE_SSH_PORT: ${T3_XCODE_SSH_PORT:-22}
+      T3_XCODE_SSH_IDENTITY_FILE: ${T3_XCODE_SSH_IDENTITY_FILE:-}
+      T3_XCODE_SSH_KNOWN_HOSTS: ${T3_XCODE_SSH_KNOWN_HOSTS:-}
+      T3_XCODE_SSH_OPTIONS_JSON: ${T3_XCODE_SSH_OPTIONS_JSON:-}
+      T3_XCODE_LOCAL_WORKSPACE_ROOT: ${T3_XCODE_LOCAL_WORKSPACE_ROOT:-/workspace}
+      T3_XCODE_REMOTE_WORKSPACE_ROOT: ${T3_XCODE_REMOTE_WORKSPACE_ROOT:-}
+      T3_XCODE_DERIVED_DATA_ROOT: ${T3_XCODE_DERIVED_DATA_ROOT:-}
+      T3_XCODE_ENABLED_WORKFLOWS: ${T3_XCODE_ENABLED_WORKFLOWS:-}
       LUMO_API_KEY: ${LUMO_API_KEY:-}
+      CLOUDFLARE_API_TOKEN: ${CLOUDFLARE_API_TOKEN:-}
+      CF_API_TOKEN: ${CF_API_TOKEN:-}
+      GITHUB_PERSONAL_ACCESS_TOKEN: ${GITHUB_PERSONAL_ACCESS_TOKEN:-}
+      CONTEXT7_API_KEY: ${CONTEXT7_API_KEY:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       CODEX_ACCESS_TOKEN: ${CODEX_ACCESS_TOKEN:-}
       CODEX_API_KEY: ${CODEX_API_KEY:-}
@@ -102,6 +125,7 @@ services:
       ANTHROPIC_BASE_URL: ${ANTHROPIC_BASE_URL:-}
       ANTHROPIC_AUTH_TOKEN: ${ANTHROPIC_AUTH_TOKEN:-}
       CLAUDE_CODE_OAUTH_TOKEN: ${CLAUDE_CODE_OAUTH_TOKEN:-}
+      CURSOR_API_KEY: ${CURSOR_API_KEY:-}
       OPENCODE_API_KEY: ${OPENCODE_API_KEY:-}
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
       GROK_DEPLOYMENT_KEY: ${GROK_DEPLOYMENT_KEY:-}
@@ -110,6 +134,8 @@ services:
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       GOOGLE_GENERATIVE_AI_API_KEY: ${GOOGLE_GENERATIVE_AI_API_KEY:-}
       XAI_API_KEY: ${XAI_API_KEY:-}
+      SENTRY_ACCESS_TOKEN: ${SENTRY_ACCESS_TOKEN:-}
+      SENTRY_AUTH_TOKEN: ${SENTRY_AUTH_TOKEN:-}
       GH_HOST: ${GH_HOST:-github.com}
       GH_GIT_PROTOCOL: ${GH_GIT_PROTOCOL:-ssh}
       GH_TOKEN: ${GH_TOKEN:-}
@@ -118,5 +144,92 @@ services:
       - ./config:/config:ro
       - ./data:/data
       - ./workspace:/workspace
+    networks:
+      - t3-platform
     tty: true
     stdin_open: true
+
+  issue-worker:
+    profiles: ["issue-worker"]
+    build:
+      context: .
+    image: ${T3_IMAGE:-local/t3code:latest}
+    container_name: t3-issue-worker
+    user: "${T3_UID:-1000}:${T3_GID:-1000}"
+    group_add:
+      - "${T3_WORKSPACE_GID:-1000}"
+    entrypoint: ["/usr/bin/dumb-init", "--", "/opt/t3-docker/issue-worker-entrypoint.sh"]
+    restart: unless-stopped
+    stop_grace_period: 2m
+    read_only: true
+    cap_drop: ["ALL"]
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      HOME: /data/issue-worker/home
+      XDG_CONFIG_HOME: /data/issue-worker/home/.config
+      XDG_DATA_HOME: /data/issue-worker/home/.local/share
+      XDG_CACHE_HOME: /data/issue-worker/home/.cache
+      OPENCODE_CONFIG_DIR: /data/issue-worker/home/.config/opencode
+      T3_ISSUE_WORKER_GITHUB_TOKEN: ${T3_ISSUE_WORKER_GITHUB_TOKEN:-}
+      T3_ISSUE_WORKER_GITHUB_API_URL: ${T3_ISSUE_WORKER_GITHUB_API_URL:-https://api.github.com}
+      T3_ISSUE_WORKER_GITHUB_API_VERSION: ${T3_ISSUE_WORKER_GITHUB_API_VERSION:-2026-03-10}
+      T3_ISSUE_WORKER_GITHUB_SERVER_URL: ${T3_ISSUE_WORKER_GITHUB_SERVER_URL:-https://github.com}
+      T3_ISSUE_WORKER_REPOSITORIES: ${T3_ISSUE_WORKER_REPOSITORIES:-}
+      T3_ISSUE_WORKER_ALLOWED_ACTORS: ${T3_ISSUE_WORKER_ALLOWED_ACTORS:-}
+      T3_ISSUE_WORKER_MODEL: ${T3_ISSUE_WORKER_MODEL:-proton/lumo-plus-v1}
+      T3_ISSUE_WORKER_AGENT: ${T3_ISSUE_WORKER_AGENT:-github-issue-worker}
+      T3_ISSUE_WORKER_PROMPT_SUFFIX: ${T3_ISSUE_WORKER_PROMPT_SUFFIX:-}
+      T3_ISSUE_WORKER_BRANCH_PREFIX: ${T3_ISSUE_WORKER_BRANCH_PREFIX:-t3-agent}
+      T3_ISSUE_WORKER_GIT_NAME: ${T3_ISSUE_WORKER_GIT_NAME:-t3-issue-worker[bot]}
+      T3_ISSUE_WORKER_GIT_EMAIL: ${T3_ISSUE_WORKER_GIT_EMAIL:-t3-issue-worker[bot]@users.noreply.github.com}
+      T3_ISSUE_WORKER_POLL_SECONDS: ${T3_ISSUE_WORKER_POLL_SECONDS:-60}
+      T3_ISSUE_WORKER_TIMEOUT_SECONDS: ${T3_ISSUE_WORKER_TIMEOUT_SECONDS:-7200}
+      T3_ISSUE_WORKER_MAX_CONCURRENT: ${T3_ISSUE_WORKER_MAX_CONCURRENT:-1}
+      T3_ISSUE_WORKER_MAX_PER_POLL: ${T3_ISSUE_WORKER_MAX_PER_POLL:-3}
+      T3_ISSUE_WORKER_MAX_POLL_FAILURES: ${T3_ISSUE_WORKER_MAX_POLL_FAILURES:-10}
+      T3_ISSUE_WORKER_MAX_LOG_BYTES: ${T3_ISSUE_WORKER_MAX_LOG_BYTES:-52428800}
+      T3_ISSUE_WORKER_BOOTSTRAP_LABELS: ${T3_ISSUE_WORKER_BOOTSTRAP_LABELS:-1}
+      T3_ISSUE_WORKER_KEEP_FAILED_DAYS: ${T3_ISSUE_WORKER_KEEP_FAILED_DAYS:-14}
+      T3_ISSUE_WORKER_ALLOW_CI_CHANGES: ${T3_ISSUE_WORKER_ALLOW_CI_CHANGES:-0}
+      T3_ISSUE_WORKER_LABEL_READY: ${T3_ISSUE_WORKER_LABEL_READY:-agent-ready}
+      T3_ISSUE_WORKER_LABEL_RUNNING: ${T3_ISSUE_WORKER_LABEL_RUNNING:-agent-running}
+      T3_ISSUE_WORKER_LABEL_PR: ${T3_ISSUE_WORKER_LABEL_PR:-agent-pr-opened}
+      T3_ISSUE_WORKER_LABEL_COMPLETE: ${T3_ISSUE_WORKER_LABEL_COMPLETE:-agent-complete}
+      T3_ISSUE_WORKER_LABEL_NEEDS_HUMAN: ${T3_ISSUE_WORKER_LABEL_NEEDS_HUMAN:-agent-needs-human}
+      T3_ISSUE_WORKER_OPENCODE_CONFIG_SOURCE: /config/opencode
+      T3_ISSUE_WORKER_DATA_ROOT: /data/issue-worker
+      T3_ISSUE_WORKER_WORKSPACE_ROOT: /workspace
+      T3_SANDBOX_URL: ${T3_SANDBOX_URL:-}
+      T3_SANDBOX_TOKEN: ${T3_SANDBOX_TOKEN:-}
+      T3_SANDBOX_LOCK_WORKSPACE: "1"
+      T3_SANDBOX_MCP_RECONCILE: "1"
+      T3_XCODE_SSH_HOST: ${T3_XCODE_SSH_HOST:-}
+      T3_XCODE_SSH_PORT: ${T3_XCODE_SSH_PORT:-22}
+      T3_XCODE_SSH_IDENTITY_FILE: /run/t3-xcode-ssh/t3-xcode
+      T3_XCODE_SSH_KNOWN_HOSTS: /run/t3-xcode-ssh/known_hosts
+      T3_XCODE_SSH_OPTIONS_JSON: ${T3_XCODE_SSH_OPTIONS_JSON:-}
+      T3_XCODE_LOCAL_WORKSPACE_ROOT: /workspace
+      T3_XCODE_REMOTE_WORKSPACE_ROOT: ${T3_XCODE_REMOTE_WORKSPACE_ROOT:-}
+      T3_XCODE_DERIVED_DATA_ROOT: ${T3_XCODE_DERIVED_DATA_ROOT:-}
+      T3_XCODE_ENABLED_WORKFLOWS: ${T3_XCODE_ENABLED_WORKFLOWS:-}
+      LUMO_API_KEY: ${LUMO_API_KEY:-}
+    volumes:
+      - ./config:/config:ro
+      - ./data/issue-worker:/data/issue-worker
+      - ./data/home/.ssh:/run/t3-xcode-ssh:ro
+      - ./workspace:/workspace
+    tmpfs:
+      - /tmp:size=512m,mode=1777
+    networks:
+      - t3-platform
+    healthcheck:
+      test: ["CMD", "node", "/opt/t3-docker/github-issue-worker.mjs", "--healthcheck"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 90s
+
+networks:
+  t3-platform:
+    name: ${T3_PLATFORM_NETWORK:-t3-agent-platform}

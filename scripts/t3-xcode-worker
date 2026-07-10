@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+cwd=""
+derived_data_root="${T3_XCODE_DERIVED_DATA_ROOT:-$HOME/Developer/xcode}"
+enabled_workflows="${T3_XCODE_ENABLED_WORKFLOWS:-}"
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --cwd)
+      cwd="${2:-}"
+      shift 2
+      ;;
+    --derived-data-root)
+      derived_data_root="${2:-}"
+      shift 2
+      ;;
+    --enabled-workflows)
+      enabled_workflows="${2:-}"
+      shift 2
+      ;;
+    *)
+      echo "Unknown argument: $1" >&2
+      exit 2
+      ;;
+  esac
+done
+
+if [[ -z "$cwd" || ! -d "$cwd" ]]; then
+  echo "Xcode worker cwd is missing or not a directory: $cwd" >&2
+  exit 2
+fi
+
+npm_prefix="${T3_XCODE_NPM_PREFIX:-$HOME/.local/share/t3-xcode-worker/npm}"
+xcodebuildmcp="$npm_prefix/bin/xcodebuildmcp"
+if [[ ! -x "$xcodebuildmcp" ]]; then
+  echo "XcodeBuildMCP is not installed; run install-xcode-worker.sh on this Mac." >&2
+  exit 127
+fi
+
+workspace_hash="$(printf '%s' "$cwd" | shasum -a 256 | cut -c1-12)"
+derived_data_path="$derived_data_root/$(basename "$cwd")-$workspace_hash"
+mkdir -p "$derived_data_path"
+
+export XCODEBUILDMCP_DERIVED_DATA_PATH="$derived_data_path"
+export XCODEBUILDMCP_SENTRY_DISABLED=true
+if [[ -n "$enabled_workflows" ]]; then
+  export XCODEBUILDMCP_ENABLED_WORKFLOWS="$enabled_workflows"
+fi
+
+cd "$cwd"
+exec "$xcodebuildmcp" mcp
+

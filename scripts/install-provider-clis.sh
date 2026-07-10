@@ -9,24 +9,13 @@ cleanup() {
 }
 trap cleanup EXIT
 
-new_tmp_dir() {
-  local dir
-  dir="$(mktemp -d)"
-  tmp_dirs+=("$dir")
-  printf '%s\n' "$dir"
-}
-
-install_npm_clis() {
+install_npm_packages() {
   local npm_cache="${T3_DOCKER_NPM_CACHE_DIR:-/tmp/npm-cache}"
   export NPM_CONFIG_CACHE="$npm_cache"
   export npm_config_cache="$npm_cache"
-  local t3_package="t3@${T3_VERSION:-latest}"
 
   npm install -g --prefix /usr/local --no-audit --no-fund --dangerously-allow-all-scripts \
-    "$t3_package" \
-    @openai/codex \
-    @anthropic-ai/claude-code \
-    opencode-ai
+    "$@"
 
   if [[ "${T3_DOCKER_KEEP_NPM_CACHE:-0}" != "1" ]]; then
     npm cache clean --force
@@ -34,11 +23,40 @@ install_npm_clis() {
   fi
 }
 
-install_cursor_agent() {
-  local cursor_home cursor_bin cursor_dir
-  cursor_home="$(new_tmp_dir)"
+install_t3_cli() {
+  install_npm_packages "t3@${T3_VERSION:-latest}"
+}
 
-  HOME="$cursor_home" NO_COLOR=1 bash -c 'curl -fsSL https://cursor.com/install | bash'
+install_npm_provider_clis() {
+  install_npm_packages \
+    "@openai/codex@${CODEX_VERSION:-latest}" \
+    "@anthropic-ai/claude-code@${CLAUDE_VERSION:-latest}" \
+    "opencode-ai@${OPENCODE_VERSION:-latest}"
+}
+
+verify_installer() {
+  local installer="$1"
+  local expected_sha256="$2"
+  local name="$3"
+
+  if [[ -z "$expected_sha256" ]]; then
+    return
+  fi
+  printf '%s  %s\n' "$expected_sha256" "$installer" | sha256sum --check --status || {
+    echo "$name installer checksum does not match the build input" >&2
+    exit 1
+  }
+}
+
+install_cursor_agent() {
+  local cursor_home cursor_bin cursor_dir installer
+  cursor_home="$(mktemp -d)"
+  tmp_dirs+=("$cursor_home")
+  installer="$cursor_home/install.sh"
+
+  curl -fsSL https://cursor.com/install -o "$installer"
+  verify_installer "$installer" "${CURSOR_INSTALLER_SHA256:-}" "Cursor Agent"
+  HOME="$cursor_home" NO_COLOR=1 bash "$installer"
 
   cursor_bin="$(readlink -f "$cursor_home/.local/bin/cursor-agent")"
   cursor_dir="$(dirname "$cursor_bin")"
@@ -50,17 +68,38 @@ install_cursor_agent() {
 }
 
 install_grok_build() {
-  local grok_home grok_bin_dir grok_bin
-  grok_home="$(new_tmp_dir)"
+  local grok_home grok_bin_dir grok_bin installer
+  grok_home="$(mktemp -d)"
+  tmp_dirs+=("$grok_home")
   grok_bin_dir="$grok_home/bin"
+  installer="$grok_home/install.sh"
 
-  HOME="$grok_home" GROK_BIN_DIR="$grok_bin_dir" bash -c 'curl -fsSL https://x.ai/cli/install.sh | bash'
+  curl -fsSL https://x.ai/cli/install.sh -o "$installer"
+  verify_installer "$installer" "${GROK_INSTALLER_SHA256:-}" "Grok Build"
+  HOME="$grok_home" GROK_BIN_DIR="$grok_bin_dir" bash "$installer" "${GROK_VERSION:-}"
 
   grok_bin="$(readlink -f "$grok_bin_dir/grok")"
   install -D -m 0755 "$grok_bin" /usr/local/share/grok-build/grok
   ln -sf /usr/local/share/grok-build/grok /usr/local/bin/grok
 }
 
-install_npm_clis
-install_cursor_agent
-install_grok_build
+case "${T3_DOCKER_INSTALL_TARGET:-all}" in
+  t3)
+    install_t3_cli
+    ;;
+  providers)
+    install_npm_provider_clis
+    install_cursor_agent
+    install_grok_build
+    ;;
+  all)
+    install_npm_provider_clis
+    install_cursor_agent
+    install_grok_build
+    install_t3_cli
+    ;;
+  *)
+    echo "T3_DOCKER_INSTALL_TARGET must be one of: all, providers, t3" >&2
+    exit 2
+    ;;
+esac

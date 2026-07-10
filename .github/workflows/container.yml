@@ -5,8 +5,6 @@ on:
     branches:
       - main
       - master
-    tags:
-      - "v*.*.*"
   pull_request:
     branches:
       - main
@@ -46,13 +44,44 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v4.2.0
+      - name: Set up uv
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          enable-cache: true
+          cache-dependency-glob: sandbox/uv.lock
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4.2.0
+      - name: Validate sources and Compose files
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv run --project sandbox --extra test --frozen ruff check \
+            --config sandbox/pyproject.toml \
+            sandbox/src sandbox/tests sandbox/render-opensandbox-config.py \
+            scripts/configure-codex-mcp.py
+          uv run --project sandbox --extra test --frozen pytest -q sandbox/tests
+          bash -n \
+            scripts/entrypoint.sh scripts/harness-auth.sh scripts/healthcheck.sh \
+            scripts/install-provider-clis.sh scripts/provision-harness-mcp.sh \
+            scripts/t3code-mcp-auth-over-ssh.sh scripts/install-xcode-worker.sh \
+            scripts/t3-xcode-auth.sh scripts/t3-xcode-ssh-gate \
+            scripts/t3-xcode-worker \
+            scripts/update-xcode-worker.sh scripts/t3-doctor.sh \
+            scripts/github-git-askpass.sh scripts/issue-worker-entrypoint.sh
+          node --check \
+            scripts/auth-proxy.mjs scripts/configure-cursor-mcp.mjs \
+            scripts/mcp-auth-helper.mjs scripts/provision-opencode-mcp.mjs \
+            scripts/t3-sandbox-mcp.mjs scripts/t3-xcode-mcp.mjs \
+            scripts/github-issue-worker-lib.mjs scripts/github-issue-worker.mjs
+          node --test tests/*.test.mjs
+          T3_SANDBOX_HOST_WORKSPACE_ROOT=/tmp/workspaces \
+            python3 sandbox/render-opensandbox-config.py \
+            sandbox/opensandbox.toml /tmp/opensandbox.toml
+          docker compose --env-file .env.example -f docker-compose.yml config --quiet
+          docker compose --env-file .env.example -f docker-compose.example.yml config --quiet
+          OPEN_SANDBOX_API_KEY=test-only T3_SANDBOX_GATEWAY_TOKEN=test-only \
+            docker compose -f sandbox/docker-compose.example.yml config --quiet
 
       - name: Normalize image name
         id: image
@@ -63,6 +92,7 @@ jobs:
         id: platforms
         shell: bash
         env:
+          EVENT_NAME: ${{ github.event_name }}
           REQUESTED_PLATFORMS: ${{ github.event.inputs.platforms || '' }}
           REPOSITORY_PLATFORMS: ${{ vars.IMAGE_PLATFORMS || '' }}
         run: |
@@ -72,7 +102,11 @@ jobs:
           repository="${REPOSITORY_PLATFORMS//[[:space:]]/}"
           platforms="${requested:-$repository}"
           if [[ -z "$platforms" ]]; then
-            platforms="linux/amd64,linux/arm64"
+            if [[ "$EVENT_NAME" == "pull_request" ]]; then
+              platforms="linux/amd64"
+            else
+              platforms="linux/amd64,linux/arm64"
+            fi
           fi
           if [[ -z "$platforms" ]]; then
             echo "No build platforms resolved." >&2
@@ -81,6 +115,13 @@ jobs:
 
           echo "platforms=$platforms" >> "$GITHUB_OUTPUT"
           echo "Build platforms: $platforms"
+
+      - name: Set up QEMU
+        if: contains(steps.platforms.outputs.platforms, 'arm64')
+        uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8 # v4.2.0
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
 
       - name: Resolve T3 version tag
         id: version
@@ -130,7 +171,7 @@ jobs:
                 headers: {
                   accept: "application/vnd.github+json",
                   authorization: `Bearer ${token}`,
-                  "x-github-api-version": "2022-11-28",
+                  "x-github-api-version": "2026-03-10",
                 },
               });
               if (response.status === 404) {
@@ -149,21 +190,9 @@ jobs:
             const encodedPackage = encodeURIComponent(packageName);
             const userUrl = `https://api.github.com/users/${owner}/packages/container/${encodedPackage}/versions`;
             const orgUrl = `https://api.github.com/orgs/${owner}/packages/container/${encodedPackage}/versions`;
-            try {
-              const userVersions = await fetchPackageVersions(userUrl);
-              if (userVersions !== null) {
-                return userVersions;
-              }
-            } catch (userError) {
-              console.warn(`Could not read user GHCR tags: ${userError.message}`);
-            }
-            try {
-              const orgVersions = await fetchPackageVersions(orgUrl);
-              return orgVersions ?? [];
-            } catch (orgError) {
-              console.warn(`Could not read org GHCR tags: ${orgError.message}`);
-              return [];
-            }
+            const userVersions = await fetchPackageVersions(userUrl);
+            if (userVersions !== null) return userVersions;
+            return (await fetchPackageVersions(orgUrl)) ?? [];
           }
 
           async function main() {
@@ -182,6 +211,9 @@ jobs:
 
             if (!Number.isInteger(buildNumber) || buildNumber < 1) {
               throw new Error(`Invalid build number: ${requestedBuildNumber}`);
+            }
+            if (requestedBuildNumber && buildNumber <= maxBuildNumber) {
+              throw new Error(`Build number must be greater than existing maximum ${maxBuildNumber}`);
             }
 
             const shouldBuild = eventName !== "schedule" || maxBuildNumber === 0;
@@ -207,9 +239,48 @@ jobs:
           });
           NODE
 
+          echo "codex_version=$(npm view @openai/codex version)" >> "$GITHUB_OUTPUT"
+          echo "claude_version=$(npm view @anthropic-ai/claude-code version)" >> "$GITHUB_OUTPUT"
+          echo "opencode_version=$(npm view opencode-ai version)" >> "$GITHUB_OUTPUT"
+          echo "mcp_sdk_version=$(npm view @modelcontextprotocol/sdk version)" >> "$GITHUB_OUTPUT"
+          echo "zod_version=$(npm view zod version)" >> "$GITHUB_OUTPUT"
+          echo "npm_version=$(npm view npm version)" >> "$GITHUB_OUTPUT"
+          echo "pnpm_version=$(npm view pnpm version)" >> "$GITHUB_OUTPUT"
+          echo "yarn_version=$(npm view yarn version)" >> "$GITHUB_OUTPUT"
+          echo "prettier_version=$(npm view prettier version)" >> "$GITHUB_OUTPUT"
+          echo "typescript_version=$(npm view typescript version)" >> "$GITHUB_OUTPUT"
+          echo "tsx_version=$(npm view tsx version)" >> "$GITHUB_OUTPUT"
+          echo "devcontainer_cli_version=$(npm view @devcontainers/cli version)" >> "$GITHUB_OUTPUT"
+
+          uv_version="$(curl -fsSL https://pypi.org/pypi/uv/json | jq -r .info.version)"
+          bun_tag="$(curl -fsSL -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+            https://api.github.com/repos/oven-sh/bun/releases/latest | jq -r .tag_name)"
+          if [[ -z "$uv_version" || "$uv_version" == "null" || "$bun_tag" != bun-v* ]]; then
+            echo "Could not resolve current uv or Bun versions." >&2
+            exit 1
+          fi
+          bun_version="${bun_tag#bun-v}"
+          echo "uv_version=$uv_version" >> "$GITHUB_OUTPUT"
+          echo "bun_version=$bun_version" >> "$GITHUB_OUTPUT"
+
+          cursor_installer="$(mktemp)"
+          grok_installer="$(mktemp)"
+          uv_installer="$(mktemp)"
+          bun_installer="$(mktemp)"
+          trap 'rm -f "$cursor_installer" "$grok_installer" "$uv_installer" "$bun_installer"' EXIT
+          curl -fsSL https://cursor.com/install -o "$cursor_installer"
+          curl -fsSL https://x.ai/cli/install.sh -o "$grok_installer"
+          curl -fsSL "https://astral.sh/uv/${uv_version}/install.sh" -o "$uv_installer"
+          curl -fsSL https://bun.sh/install -o "$bun_installer"
+          echo "cursor_installer_sha256=$(sha256sum "$cursor_installer" | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+          echo "grok_installer_sha256=$(sha256sum "$grok_installer" | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+          echo "uv_installer_sha256=$(sha256sum "$uv_installer" | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+          echo "bun_installer_sha256=$(sha256sum "$bun_installer" | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+          echo "grok_version=$(curl -fsSL https://x.ai/cli/stable)" >> "$GITHUB_OUTPUT"
+
       - name: Log in to GHCR
         if: github.event_name != 'pull_request' && steps.version.outputs.should_build == 'true'
-        uses: docker/login-action@v4.4.0
+        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4.4.0
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -217,7 +288,7 @@ jobs:
 
       - name: Extract image metadata
         id: meta
-        uses: docker/metadata-action@v6.2.0
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
           images: ${{ env.REGISTRY }}/${{ steps.image.outputs.name }}
           tags: |
@@ -232,9 +303,84 @@ jobs:
             org.opencontainers.image.version=${{ steps.version.outputs.image_version }}
             org.opencontainers.image.vendor=traktuner
 
+      - name: Extract agent base metadata
+        id: agent_meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        with:
+          images: ${{ env.REGISTRY }}/${{ steps.image.outputs.name }}
+          flavor: latest=false
+          tags: |
+            type=raw,value=agent-base
+            type=raw,value=agent-base-${{ steps.version.outputs.image_version }}
+            type=sha,prefix=agent-base-sha-
+          labels: |
+            org.opencontainers.image.title=docker-t3-code agent base
+            org.opencontainers.image.description=Ephemeral non-root coding environment for T3 sandbox workers
+            org.opencontainers.image.version=${{ steps.version.outputs.image_version }}
+            org.opencontainers.image.vendor=traktuner
+
+      - name: Extract sandbox gateway metadata
+        id: gateway_meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        with:
+          images: ${{ env.REGISTRY }}/${{ steps.image.outputs.name }}
+          flavor: latest=false
+          tags: |
+            type=raw,value=sandbox-gateway
+            type=raw,value=sandbox-gateway-${{ steps.version.outputs.image_version }}
+            type=sha,prefix=sandbox-gateway-sha-
+          labels: |
+            org.opencontainers.image.title=docker-t3-code sandbox gateway
+            org.opencontainers.image.description=Policy gateway for OpenSandbox coding environments
+            org.opencontainers.image.version=${{ steps.version.outputs.image_version }}
+            org.opencontainers.image.vendor=traktuner
+
+      - name: Build and optionally push agent base
+        if: steps.version.outputs.should_build == 'true'
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: ./sandbox
+          file: ./sandbox/Dockerfile.agent
+          platforms: ${{ steps.platforms.outputs.platforms }}
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.agent_meta.outputs.tags }}
+          labels: ${{ steps.agent_meta.outputs.labels }}
+          build-args: |
+            PNPM_VERSION=${{ steps.version.outputs.pnpm_version }}
+            YARN_VERSION=${{ steps.version.outputs.yarn_version }}
+            UV_VERSION=${{ steps.version.outputs.uv_version }}
+          pull: true
+          cache-from: |
+            type=gha,scope=${{ steps.image.outputs.name }}-agent-base
+            type=registry,ref=${{ env.REGISTRY }}/${{ steps.image.outputs.name }}:buildcache-agent-base
+          cache-to: |
+            type=gha,mode=max,scope=${{ steps.image.outputs.name }}-agent-base
+            type=registry,ref=${{ env.REGISTRY }}/${{ steps.image.outputs.name }}:buildcache-agent-base,mode=max,ignore-error=true
+
+      - name: Build and optionally push sandbox gateway
+        if: steps.version.outputs.should_build == 'true'
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: ./sandbox
+          file: ./sandbox/Dockerfile.gateway
+          platforms: ${{ steps.platforms.outputs.platforms }}
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.gateway_meta.outputs.tags }}
+          labels: ${{ steps.gateway_meta.outputs.labels }}
+          build-args: |
+            DEVCONTAINER_CLI_VERSION=${{ steps.version.outputs.devcontainer_cli_version }}
+            UV_VERSION=${{ steps.version.outputs.uv_version }}
+          pull: true
+          cache-from: |
+            type=gha,scope=${{ steps.image.outputs.name }}-sandbox-gateway
+            type=registry,ref=${{ env.REGISTRY }}/${{ steps.image.outputs.name }}:buildcache-sandbox-gateway
+          cache-to: |
+            type=gha,mode=max,scope=${{ steps.image.outputs.name }}-sandbox-gateway
+            type=registry,ref=${{ env.REGISTRY }}/${{ steps.image.outputs.name }}:buildcache-sandbox-gateway,mode=max,ignore-error=true
+
       - name: Build and optionally push
         if: steps.version.outputs.should_build == 'true'
-        uses: docker/build-push-action@v7.3.0
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
           context: .
           file: ./Dockerfile
@@ -245,8 +391,31 @@ jobs:
           build-args: |
             T3_VERSION=${{ steps.version.outputs.t3_version }}
             T3_BUILD_NUMBER=${{ steps.version.outputs.build_number }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+            CODEX_VERSION=${{ steps.version.outputs.codex_version }}
+            CLAUDE_VERSION=${{ steps.version.outputs.claude_version }}
+            OPENCODE_VERSION=${{ steps.version.outputs.opencode_version }}
+            CURSOR_INSTALLER_SHA256=${{ steps.version.outputs.cursor_installer_sha256 }}
+            GROK_INSTALLER_SHA256=${{ steps.version.outputs.grok_installer_sha256 }}
+            GROK_VERSION=${{ steps.version.outputs.grok_version }}
+            MCP_SDK_VERSION=${{ steps.version.outputs.mcp_sdk_version }}
+            ZOD_VERSION=${{ steps.version.outputs.zod_version }}
+            NPM_VERSION=${{ steps.version.outputs.npm_version }}
+            PNPM_VERSION=${{ steps.version.outputs.pnpm_version }}
+            YARN_VERSION=${{ steps.version.outputs.yarn_version }}
+            PRETTIER_VERSION=${{ steps.version.outputs.prettier_version }}
+            TYPESCRIPT_VERSION=${{ steps.version.outputs.typescript_version }}
+            TSX_VERSION=${{ steps.version.outputs.tsx_version }}
+            UV_VERSION=${{ steps.version.outputs.uv_version }}
+            UV_INSTALLER_SHA256=${{ steps.version.outputs.uv_installer_sha256 }}
+            BUN_VERSION=${{ steps.version.outputs.bun_version }}
+            BUN_INSTALLER_SHA256=${{ steps.version.outputs.bun_installer_sha256 }}
+          pull: true
+          cache-from: |
+            type=gha,scope=${{ steps.image.outputs.name }}
+            type=registry,ref=${{ env.REGISTRY }}/${{ steps.image.outputs.name }}:buildcache
+          cache-to: |
+            type=gha,mode=max,scope=${{ steps.image.outputs.name }}
+            type=registry,ref=${{ env.REGISTRY }}/${{ steps.image.outputs.name }}:buildcache,mode=max,ignore-error=true
 
       - name: Skip unchanged scheduled stable
         if: steps.version.outputs.should_build != 'true'

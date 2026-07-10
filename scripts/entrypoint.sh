@@ -2,7 +2,20 @@
 set -Eeuo pipefail
 
 RUNTIME_ENV=/tmp/t3-docker/runtime.env
+auth_helper_pid=""
+managed_opencode_pid=""
+t3_pid=""
+proxy_pid=""
 mkdir -p "$(dirname "$RUNTIME_ENV")" /data/home /data/npm-global /data/npm-cache /data/codex
+
+if [[ -z "${T3_SANDBOX_TOKEN:-}" && -n "${T3_SANDBOX_TOKEN_FILE:-}" ]]; then
+  if [[ ! -r "$T3_SANDBOX_TOKEN_FILE" ]]; then
+    echo "T3_SANDBOX_TOKEN_FILE is not readable: $T3_SANDBOX_TOKEN_FILE" >&2
+    exit 1
+  fi
+  T3_SANDBOX_TOKEN="$(<"$T3_SANDBOX_TOKEN_FILE")"
+  export T3_SANDBOX_TOKEN
+fi
 
 python3 /opt/t3-docker/render-config.py "${T3CODE_CONFIG_PATH:-/config/t3code.toml}" "$RUNTIME_ENV"
 # shellcheck disable=SC1090
@@ -30,18 +43,47 @@ mkdir -p \
   "$XDG_CACHE_HOME" \
   "$OPENCODE_CONFIG_DIR"
 
+persist_runtime_env_value() {
+  local name="$1"
+  local value="$2"
+  printf '%s=%q\n' "$name" "$value" >> "$RUNTIME_ENV"
+}
+
+preserve_opencode_mcp_config() {
+  local target_dir="$1"
+  local candidate="${T3_OPENCODE_CONFIG:-}"
+
+  if [[ -z "$candidate" || ! -f "$candidate" ]]; then
+    for candidate in "$target_dir/opencode.jsonc" "$target_dir/opencode.json"; do
+      [[ -f "$candidate" ]] && break
+    done
+  fi
+  if [[ ! -f "$candidate" || -n "${T3_OPENCODE_MCP_PRESERVE_FILE:-}" ]]; then
+    return 0
+  fi
+
+  T3_OPENCODE_MCP_PRESERVE_FILE="$(mktemp /tmp/t3-docker/opencode-mcp-preserve.XXXXXX.jsonc)"
+  T3_OPENCODE_MCP_PRESERVE_FILE_GENERATED=1
+  cp "$candidate" "$T3_OPENCODE_MCP_PRESERVE_FILE"
+  export T3_OPENCODE_MCP_PRESERVE_FILE T3_OPENCODE_MCP_PRESERVE_FILE_GENERATED
+}
+
 provision_opencode_config_dir() {
   local source="${T3_OPENCODE_CONFIG_DIR_SOURCE:-}"
   local target="${OPENCODE_CONFIG_DIR:-$XDG_CONFIG_HOME/opencode}"
   local sync_mode="${T3_OPENCODE_CONFIG_SYNC_MODE:-preserve-mcp}"
   local -a rsync_args=(
     -a
-    --checksum
     --exclude='node_modules/'
     --exclude='*.bak*'
     --exclude='*~'
     --exclude='.DS_Store'
   )
+
+  sync_mode="$(printf '%s' "$sync_mode" | tr '[:upper:]_' '[:lower:]-' | tr -d '[:space:]')"
+  if [[ "$sync_mode" == "preserve-mcp" ]]; then
+    preserve_opencode_mcp_config "$target"
+  fi
 
   if [[ -z "$source" ]]; then
     return 0
@@ -53,7 +95,6 @@ provision_opencode_config_dir() {
   fi
 
   mkdir -p "$target"
-  sync_mode="$(printf '%s' "$sync_mode" | tr '[:upper:]_' '[:lower:]-' | tr -d '[:space:]')"
   case "$sync_mode" in
     none)
       echo "Skipping OpenCode config sync because T3_OPENCODE_CONFIG_SYNC_MODE=none"
@@ -71,12 +112,6 @@ provision_opencode_config_dir() {
       rsync "${rsync_args[@]}" --delete "$source"/ "$target"/
       ;;
     preserve-mcp)
-      if [[ -f "$target/opencode.jsonc" && -z "${T3_OPENCODE_MCP_PRESERVE_FILE:-}" ]]; then
-        T3_OPENCODE_MCP_PRESERVE_FILE="$(mktemp /tmp/t3-docker/opencode-mcp-preserve.XXXXXX.jsonc)"
-        T3_OPENCODE_MCP_PRESERVE_FILE_GENERATED=1
-        cp "$target/opencode.jsonc" "$T3_OPENCODE_MCP_PRESERVE_FILE"
-        export T3_OPENCODE_MCP_PRESERVE_FILE T3_OPENCODE_MCP_PRESERVE_FILE_GENERATED
-      fi
       echo "Mirroring OpenCode config from $source to $target while preserving runtime MCP registrations"
       rsync "${rsync_args[@]}" --delete "$source"/ "$target"/
       ;;
@@ -127,9 +162,22 @@ provision_opencode_config_dir() {
 
 provision_opencode_mcp() {
   local config_path="${T3_OPENCODE_CONFIG:-}"
+  local config_source="${T3_OPENCODE_CONFIG_SOURCE_FILE:-}"
   local target_dir="${OPENCODE_CONFIG_DIR:-$XDG_CONFIG_HOME/opencode}"
   if [[ -z "$config_path" ]]; then
     config_path="$target_dir/opencode.jsonc"
+  fi
+
+  if [[ -n "$config_source" ]]; then
+    if [[ ! -f "$config_source" ]]; then
+      echo "T3_OPENCODE_CONFIG_SOURCE points to a missing file: $config_source" >&2
+      exit 1
+    fi
+    if [[ "$config_source" != "$config_path" ]]; then
+      mkdir -p "$(dirname "$config_path")"
+      cp "$config_source" "$config_path"
+      chmod u+rw "$config_path"
+    fi
   fi
 
   if [[ -e "$config_path" && ! -w "$config_path" ]]; then
@@ -141,6 +189,7 @@ provision_opencode_mcp() {
     fi
     config_path="$generated_config"
     export T3_OPENCODE_CONFIG="$generated_config"
+    persist_runtime_env_value T3_OPENCODE_CONFIG "$generated_config"
   fi
 
   if [[ ! -e "$config_path" ]]; then
@@ -177,7 +226,7 @@ provision_optional_config_dir() {
 
   mkdir -p "$target"
   echo "Syncing ${label} config from $source to $target"
-  rsync -a --checksum \
+  rsync -a \
     --exclude='node_modules/' \
     --exclude='*.bak*' \
     --exclude='*~' \
@@ -221,43 +270,80 @@ install_npm_latest() {
     return 0
   fi
 
-  echo "Updating $label package: $package_name@latest"
-  if npm install -g --no-audit --no-fund --dangerously-allow-all-scripts "${package_name}@latest"; then
+  local current_version=""
+  local latest_version=""
+  local prefix manifest
+  for prefix in "$NPM_CONFIG_PREFIX" /usr/local; do
+    manifest="$prefix/lib/node_modules/$package_name/package.json"
+    if [[ -f "$manifest" ]]; then
+      current_version="$(node -p 'require(process.argv[1]).version' "$manifest" 2>/dev/null || true)"
+      if [[ -n "$current_version" ]]; then
+        break
+      fi
+    fi
+  done
+
+  if ! latest_version="$(npm view "${package_name}@latest" version 2>/dev/null)" || [[ -z "$latest_version" ]]; then
+    echo "Warning: could not resolve $label latest version; continuing with ${current_version:-the bundled binary}." >&2
+    if [[ -n "$binary_name" ]] && command -v "$binary_name" >/dev/null 2>&1; then
+      return 0
+    fi
+    return 1
+  fi
+
+  if [[ "$current_version" == "$latest_version" ]]; then
+    echo "$label is current at $current_version"
     return 0
   fi
 
-  echo "Warning: failed to update $label package. Falling back to bundled image version if available." >&2
-  if [[ -n "$binary_name" ]]; then
-    npm uninstall -g "$package_name" >/dev/null 2>&1 || true
-    if command -v "$binary_name" >/dev/null 2>&1; then
-      echo "Continuing with bundled $label at $(command -v "$binary_name")"
-      return 0
-    fi
+  echo "Updating $label package: ${current_version:-not installed} -> $latest_version"
+  if npm install -g --no-audit --no-fund --dangerously-allow-all-scripts "${package_name}@${latest_version}"; then
+    return 0
   fi
 
-  echo "No usable bundled $label binary found after failed update." >&2
+  echo "Warning: failed to update $label package. Falling back to the existing binary if available." >&2
+  if [[ -n "$binary_name" ]] && command -v "$binary_name" >/dev/null 2>&1; then
+    echo "Continuing with $label at $(command -v "$binary_name")"
+    return 0
+  fi
+
+  echo "No usable $label binary found after failed update." >&2
   return 1
 }
 
 install_cursor_latest() {
   local enabled="$1"
+  local installer
   if [[ "$enabled" != "1" ]]; then
     return 0
   fi
 
   echo "Updating Cursor Agent via official installer"
-  HOME="$HOME" NO_COLOR=1 bash -c 'curl -fsSL https://cursor.com/install | bash'
+  installer="$(mktemp /tmp/t3-docker/cursor-install.XXXXXX.sh)"
+  if curl -fsSL https://cursor.com/install -o "$installer" && HOME="$HOME" NO_COLOR=1 bash "$installer"; then
+    rm -f "$installer"
+    return 0
+  fi
+  rm -f "$installer"
+  return 1
 }
 
 install_grok_latest() {
   local enabled="$1"
   local grok_bin_dir="${GROK_BIN_DIR:-$HOME/.grok/bin}"
+  local installer
   if [[ "$enabled" != "1" ]]; then
     return 0
   fi
 
   echo "Updating Grok Build via official installer"
-  HOME="$HOME" GROK_BIN_DIR="$grok_bin_dir" bash -c 'curl -fsSL https://x.ai/cli/install.sh | bash'
+  installer="$(mktemp /tmp/t3-docker/grok-install.XXXXXX.sh)"
+  if curl -fsSL https://x.ai/cli/install.sh -o "$installer" && HOME="$HOME" GROK_BIN_DIR="$grok_bin_dir" bash "$installer"; then
+    rm -f "$installer"
+  else
+    rm -f "$installer"
+    return 1
+  fi
   # Grok also installs an `agent` alias; keep Cursor's `agent` binary unambiguous for T3.
   rm -f "$grok_bin_dir/agent" "$grok_bin_dir/agent.exe"
 }
@@ -270,7 +356,7 @@ start_managed_opencode_server() {
   local host="${T3_OPENCODE_MANAGED_HOST:-127.0.0.1}"
   local port="${T3_OPENCODE_MANAGED_PORT:-4096}"
   local config="${T3_OPENCODE_CONFIG:-}"
-  local ready_url="${T3_OPENCODE_READY_URL:-http://${host}:${port}/}"
+  local ready_url="${T3_OPENCODE_READY_URL:-http://${host}:${port}/global/health}"
   local -a server_env=(env)
 
   if [[ -n "$config" ]]; then
@@ -279,12 +365,12 @@ start_managed_opencode_server() {
 
   echo "Starting managed OpenCode server on http://${host}:${port}"
   "${server_env[@]}" opencode serve "--hostname=${host}" "--port=${port}" &
-  local opencode_pid="$!"
+  managed_opencode_pid="$!"
 
   for _ in $(seq 1 30); do
-    if ! kill -0 "$opencode_pid" 2>/dev/null; then
+    if ! kill -0 "$managed_opencode_pid" 2>/dev/null; then
       echo "Managed OpenCode server exited before becoming ready." >&2
-      wait "$opencode_pid" || true
+      wait "$managed_opencode_pid" || true
       exit 1
     fi
 
@@ -296,6 +382,21 @@ start_managed_opencode_server() {
   done
 
   echo "Managed OpenCode server did not answer readiness probe; T3 will still try http://${host}:${port}." >&2
+}
+
+start_auth_web_helper() {
+  if [[ "${T3_AUTH_WEB_HELPER:-0}" != "1" ]]; then
+    return 0
+  fi
+
+  echo "Starting T3 auth helper on http://${T3_AUTH_WEB_HELPER_HOST:-0.0.0.0}:${T3_AUTH_WEB_HELPER_PORT:-13774}"
+  node /opt/t3-docker/mcp-auth-helper.mjs &
+  auth_helper_pid="$!"
+  if ! wait_for_http_ready "http://127.0.0.1:${T3_AUTH_WEB_HELPER_PORT:-13774}/auth-tools" "T3 auth helper" 20; then
+    kill "$auth_helper_pid" >/dev/null 2>&1 || true
+    wait "$auth_helper_pid" >/dev/null 2>&1 || true
+    exit 1
+  fi
 }
 
 wait_for_http_ready() {
@@ -314,6 +415,25 @@ wait_for_http_ready() {
   return 1
 }
 
+cleanup_children() {
+  local name pid
+  for name in auth_helper_pid managed_opencode_pid proxy_pid t3_pid; do
+    pid="${!name:-}"
+    [[ -z "$pid" ]] || kill "$pid" >/dev/null 2>&1 || true
+  done
+  for name in auth_helper_pid managed_opencode_pid proxy_pid t3_pid; do
+    pid="${!name:-}"
+    [[ -z "$pid" ]] || wait "$pid" >/dev/null 2>&1 || true
+  done
+}
+
+wait_for_supervised_processes() {
+  local exit_code=0
+  wait -n "$@" || exit_code="$?"
+  cleanup_children
+  exit "$exit_code"
+}
+
 run_t3_foreground() {
   local -a args=(
     serve
@@ -325,7 +445,17 @@ run_t3_foreground() {
   args+=("$T3_WORKDIR")
 
   echo "Starting T3 Code on http://${T3_SERVER_HOST}:${T3_SERVER_PORT} with workdir ${T3_WORKDIR}"
-  exec t3 "${args[@]}"
+  if [[ -z "${auth_helper_pid:-}" && -z "${managed_opencode_pid:-}" ]]; then
+    exec t3 "${args[@]}"
+  fi
+
+  t3 "${args[@]}" &
+  t3_pid="$!"
+  trap cleanup_children TERM INT
+  local -a supervised_pids=("$t3_pid")
+  [[ -z "${auth_helper_pid:-}" ]] || supervised_pids+=("$auth_helper_pid")
+  [[ -z "${managed_opencode_pid:-}" ]] || supervised_pids+=("$managed_opencode_pid")
+  wait_for_supervised_processes "${supervised_pids[@]}"
 }
 
 run_t3_with_auth_proxy() {
@@ -343,19 +473,7 @@ run_t3_with_auth_proxy() {
 
   echo "Starting T3 Code internal backend on http://${upstream_host}:${upstream_port} with workdir ${T3_WORKDIR}"
   t3 "${args[@]}" &
-  local t3_pid="$!"
-  local proxy_pid=""
-
-  cleanup_children() {
-    if [[ -n "${t3_pid:-}" ]]; then
-      kill "$t3_pid" >/dev/null 2>&1 || true
-      wait "$t3_pid" >/dev/null 2>&1 || true
-    fi
-    if [[ -n "${proxy_pid:-}" ]]; then
-      kill "$proxy_pid" >/dev/null 2>&1 || true
-      wait "$proxy_pid" >/dev/null 2>&1 || true
-    fi
-  }
+  t3_pid="$!"
   trap cleanup_children TERM INT
 
   if ! wait_for_http_ready "http://${upstream_host}:${upstream_port}/api/auth/session" "T3 Code internal backend"; then
@@ -372,10 +490,10 @@ run_t3_with_auth_proxy() {
     node /opt/t3-docker/auth-proxy.mjs &
   proxy_pid="$!"
 
-  wait -n "$t3_pid" "$proxy_pid"
-  local exit_code="$?"
-  cleanup_children
-  exit "$exit_code"
+  local -a supervised_pids=("$t3_pid" "$proxy_pid")
+  [[ -z "${auth_helper_pid:-}" ]] || supervised_pids+=("$auth_helper_pid")
+  [[ -z "${managed_opencode_pid:-}" ]] || supervised_pids+=("$managed_opencode_pid")
+  wait_for_supervised_processes "${supervised_pids[@]}"
 }
 
 if [[ "${T3_AUTO_UPDATE_EFFECTIVE:-1}" == "1" ]]; then
@@ -395,7 +513,12 @@ else
   fi
 fi
 
+if ! /opt/t3-docker/provision-harness-mcp.sh; then
+  echo "Warning: failed to provision one or more harness MCP registrations." >&2
+fi
+
 start_managed_opencode_server
+start_auth_web_helper
 
 mkdir -p "$T3_WORKDIR"
 cd "$T3_WORKDIR"

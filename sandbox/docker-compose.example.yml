@@ -1,0 +1,131 @@
+services:
+  config-init:
+    build:
+      context: .
+      dockerfile: Dockerfile.gateway
+    image: ${T3_SANDBOX_GATEWAY_IMAGE:-ghcr.io/traktuner/docker-t3-code:sandbox-gateway}
+    user: "0:0"
+    network_mode: none
+    command:
+      - /opt/t3-sandbox/render-opensandbox-config.py
+      - /opt/t3-sandbox/opensandbox.toml
+      - /config/opensandbox.toml
+    environment:
+      T3_SANDBOX_HOST_WORKSPACE_ROOT: ${T3_SANDBOX_HOST_WORKSPACE_ROOT:-/mnt/t3code-workspaces/developer}
+      T3_SANDBOX_RUNTIME_NETWORK: ${T3_SANDBOX_RUNTIME_NETWORK:-t3-sandbox-runtime}
+      T3_SANDBOX_DOCKER_NETWORK_MODE: ${T3_SANDBOX_DOCKER_NETWORK_MODE:-}
+      T3_SANDBOX_MAX_TTL_SECONDS: ${T3_SANDBOX_MAX_TTL_SECONDS:-28800}
+      T3_SANDBOX_PORT_RANGE_MIN: ${T3_SANDBOX_PORT_RANGE_MIN:-40000}
+      T3_SANDBOX_PORT_RANGE_MAX: ${T3_SANDBOX_PORT_RANGE_MAX:-40200}
+      T3_SANDBOX_PIDS_LIMIT: ${T3_SANDBOX_PIDS_LIMIT:-4096}
+      T3_SANDBOX_APPARMOR_PROFILE: ${T3_SANDBOX_APPARMOR_PROFILE:-}
+      T3_SANDBOX_SECCOMP_PROFILE: ${T3_SANDBOX_SECCOMP_PROFILE:-}
+      T3_SANDBOX_EXECD_IMAGE: ${T3_SANDBOX_EXECD_IMAGE:-opensandbox/execd:v1.0.20}
+      T3_SANDBOX_EGRESS_IMAGE: ${T3_SANDBOX_EGRESS_IMAGE:-opensandbox/egress:v1.1.3}
+      T3_SANDBOX_EGRESS_MODE: ${T3_SANDBOX_EGRESS_MODE:-dns}
+      T3_SANDBOX_EGRESS_ALLOW: ${T3_SANDBOX_EGRESS_ALLOW:-}
+      T3_SANDBOX_DOCKER_HOST_IP: ${T3_SANDBOX_DOCKER_HOST_IP:-host.docker.internal}
+      T3_SANDBOX_SECURE_RUNTIME: ${T3_SANDBOX_SECURE_RUNTIME:-}
+      T3_SANDBOX_DOCKER_RUNTIME: ${T3_SANDBOX_DOCKER_RUNTIME:-}
+    volumes:
+      - opensandbox-config:/config
+    restart: "no"
+
+  cache-init:
+    image: ${T3_SANDBOX_AGENT_IMAGE:-ghcr.io/traktuner/docker-t3-code:agent-base}
+    user: "0:0"
+    command:
+      - /bin/sh
+      - -lc
+      - install -d -m 0777 /cache/bin /cache/workspaces
+    volumes:
+      - agent-cache:/cache
+    restart: "no"
+
+  opensandbox:
+    image: opensandbox/server:v0.2.1
+    restart: unless-stopped
+    environment:
+      OPENSANDBOX_SERVER_API_KEY: ${OPEN_SANDBOX_API_KEY:?required}
+    command: ["--config", "/etc/opensandbox/config.toml"]
+    depends_on:
+      config-init:
+        condition: service_completed_successfully
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - opensandbox-config:/etc/opensandbox:ro
+      - opensandbox-data:/data
+      - ${T3_SANDBOX_HOST_WORKSPACE_ROOT:-/mnt/t3code-workspaces/developer}:${T3_SANDBOX_HOST_WORKSPACE_ROOT:-/mnt/t3code-workspaces/developer}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      control:
+      runtime:
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=2)"]
+      interval: 20s
+      timeout: 3s
+      retries: 5
+      start_period: 20s
+
+  gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile.gateway
+    image: ${T3_SANDBOX_GATEWAY_IMAGE:-ghcr.io/traktuner/docker-t3-code:sandbox-gateway}
+    restart: unless-stopped
+    ports:
+      - "${T3_SANDBOX_BIND_ADDRESS:-127.0.0.1}:${T3_SANDBOX_PORT:-8090}:8090"
+    depends_on:
+      cache-init:
+        condition: service_completed_successfully
+      opensandbox:
+        condition: service_healthy
+    environment:
+      OPEN_SANDBOX_DOMAIN: opensandbox:8080
+      OPEN_SANDBOX_API_KEY: ${OPEN_SANDBOX_API_KEY:?required}
+      T3_SANDBOX_GATEWAY_TOKEN: ${T3_SANDBOX_GATEWAY_TOKEN:?required}
+      T3_SANDBOX_CLIENT_WORKSPACE_ROOT: /workspace
+      T3_SANDBOX_HOST_WORKSPACE_ROOT: ${T3_SANDBOX_HOST_WORKSPACE_ROOT:-/mnt/t3code-workspaces/developer}
+      T3_SANDBOX_BASE_IMAGE: ${T3_SANDBOX_AGENT_IMAGE:-ghcr.io/traktuner/docker-t3-code:agent-base}
+      T3_SANDBOX_CACHE_VOLUME: ${T3_SANDBOX_CACHE_VOLUME:-t3-sandbox-agent-cache}
+      T3_SANDBOX_MAX_CONCURRENT: ${T3_SANDBOX_MAX_CONCURRENT:-4}
+      T3_SANDBOX_DEFAULT_TTL_SECONDS: ${T3_SANDBOX_DEFAULT_TTL_SECONDS:-7200}
+      T3_SANDBOX_MAX_TTL_SECONDS: ${T3_SANDBOX_MAX_TTL_SECONDS:-28800}
+      T3_SANDBOX_MAX_COMMAND_SECONDS: ${T3_SANDBOX_MAX_COMMAND_SECONDS:-1800}
+      T3_SANDBOX_MAX_OUTPUT_BYTES: ${T3_SANDBOX_MAX_OUTPUT_BYTES:-262144}
+      T3_SANDBOX_DEVCONTAINER_BUILD_SECONDS: ${T3_SANDBOX_DEVCONTAINER_BUILD_SECONDS:-3600}
+      T3_SANDBOX_DEVCONTAINER_ENABLED: ${T3_SANDBOX_DEVCONTAINER_ENABLED:-1}
+      T3_SANDBOX_DEVCONTAINER_FEATURE_PREFIXES: ${T3_SANDBOX_DEVCONTAINER_FEATURE_PREFIXES:-ghcr.io/devcontainers/features/,ghcr.io/devcontainers-extra/features/}
+      T3_SANDBOX_DEVCONTAINER_PLATFORM: ${T3_SANDBOX_DEVCONTAINER_PLATFORM:-linux/amd64}
+      T3_SANDBOX_WORKSPACE_GID: ${T3_SANDBOX_WORKSPACE_GID:-3001}
+      T3_SANDBOX_CPU_LIMIT: ${T3_SANDBOX_CPU_LIMIT:-4}
+      T3_SANDBOX_MEMORY_LIMIT: ${T3_SANDBOX_MEMORY_LIMIT:-8Gi}
+      T3_SANDBOX_EGRESS_ALLOW: ${T3_SANDBOX_EGRESS_ALLOW:-}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - gateway-data:/data
+      - ${T3_SANDBOX_HOST_WORKSPACE_ROOT:-/mnt/t3code-workspaces/developer}:${T3_SANDBOX_HOST_WORKSPACE_ROOT:-/mnt/t3code-workspaces/developer}:ro
+    networks:
+      control:
+      platform:
+        aliases:
+          - t3-sandbox-gateway
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  opensandbox-config:
+  agent-cache:
+    name: ${T3_SANDBOX_CACHE_VOLUME:-t3-sandbox-agent-cache}
+  gateway-data:
+  opensandbox-data:
+
+networks:
+  control:
+    internal: true
+  runtime:
+    name: ${T3_SANDBOX_RUNTIME_NETWORK:-t3-sandbox-runtime}
+  platform:
+    external: true
+    name: ${T3_PLATFORM_NETWORK:-t3-agent-platform}

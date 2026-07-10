@@ -7,8 +7,10 @@ if (!configPath) {
   console.error("Usage: provision-opencode-mcp.mjs <opencode.jsonc>");
   process.exit(2);
 }
+const reconcileManaged = (process.env.T3_SANDBOX_MCP_RECONCILE || "1") === "1";
+const managedMcpNames = ["t3-sandbox", "xcodebuild"];
 
-const cloudflareMcp = {
+const cloudflareMcpBase = {
   cloudflare: {
     type: "remote",
     url: "https://mcp.cloudflare.com/mcp",
@@ -43,7 +45,20 @@ const cloudflareMcp = {
 const cloudflareMcpProfiles = {
   docs: ["cloudflare-docs"],
   core: ["cloudflare", "cloudflare-docs"],
-  all: Object.keys(cloudflareMcp),
+  api: ["cloudflare", "cloudflare-docs"],
+  token: ["cloudflare", "cloudflare-docs"],
+  all: Object.keys(cloudflareMcpBase),
+};
+
+const mcpPresets = {
+  grep: {
+    gh_grep: {
+      type: "remote",
+      url: "https://mcp.grep.app",
+      enabled: true,
+      timeout: 10000,
+    },
+  },
 };
 
 function parseMcpServers(label, raw) {
@@ -77,22 +92,189 @@ function addObjectEntries(target, entries) {
   }
 }
 
+function addMissingEntries(target, entries) {
+  for (const [name, config] of Object.entries(entries)) {
+    if (!target.has(name)) target.set(name, config);
+  }
+}
+
+function firstNonEmptyEnv(names) {
+  for (const name of names) {
+    if ((process.env[name] || "").trim()) return name;
+  }
+  return "";
+}
+
+function cloneJson(value) {
+  return JSON.parse(JSON.stringify(value));
+}
+
+function cloudflareAuthMode() {
+  const raw = (process.env.T3_OPENCODE_CLOUDFLARE_AUTH || "auto").trim().toLowerCase();
+  if (!["auto", "oauth", "token"].includes(raw)) {
+    throw new Error("T3_OPENCODE_CLOUDFLARE_AUTH must be one of: auto, oauth, token");
+  }
+  if (raw !== "auto") return raw;
+  return firstNonEmptyEnv(["CLOUDFLARE_API_TOKEN", "CF_API_TOKEN"]) ? "token" : "oauth";
+}
+
+function cloudflareEntry(name, authMode = cloudflareAuthMode()) {
+  const entry = cloneJson(cloudflareMcpBase[name]);
+  const tokenEnv = firstNonEmptyEnv(["CLOUDFLARE_API_TOKEN", "CF_API_TOKEN"]);
+  if (name === "cloudflare" && authMode === "token") {
+    if (!tokenEnv) {
+      throw new Error("T3_OPENCODE_CLOUDFLARE_AUTH=token requires CLOUDFLARE_API_TOKEN or CF_API_TOKEN");
+    }
+    entry.oauth = false;
+    entry.headers = {
+      ...(entry.headers || {}),
+      Authorization: `Bearer {env:${tokenEnv}}`,
+    };
+  }
+  return entry;
+}
+
 function addCloudflareEntries(target) {
   const raw = (process.env.T3_OPENCODE_CLOUDFLARE_MCP || "1").trim().toLowerCase();
   if (["0", "false", "no", "off", "none", "disabled"].includes(raw)) {
     return;
   }
 
-  const profile = ["1", "true", "yes", "on", "all", "enabled"].includes(raw) ? "all" : raw;
+  const profile = ["1", "true", "yes", "on", "enabled"].includes(raw) ? "core" : raw;
   const names = cloudflareMcpProfiles[profile];
   if (!names) {
     throw new Error(
-      "T3_OPENCODE_CLOUDFLARE_MCP must be one of: 0, 1, false, true, off, on, docs, core, all",
+      "T3_OPENCODE_CLOUDFLARE_MCP must be one of: 0, 1, false, true, off, on, docs, core, api, token, all",
     );
   }
 
+  const authMode = profile === "token" ? "token" : cloudflareAuthMode();
   for (const name of names) {
-    target.set(name, cloudflareMcp[name]);
+    if (!target.has(name)) target.set(name, cloudflareEntry(name, authMode));
+  }
+}
+
+function context7Preset() {
+  const entry = {
+    type: "remote",
+    url: "https://mcp.context7.com/mcp",
+    enabled: true,
+    timeout: 10000,
+  };
+  if (firstNonEmptyEnv(["CONTEXT7_API_KEY"])) {
+    entry.headers = { CONTEXT7_API_KEY: "{env:CONTEXT7_API_KEY}" };
+  }
+  return { context7: entry };
+}
+
+function githubPreset() {
+  const tokenEnv = firstNonEmptyEnv(["GITHUB_PERSONAL_ACCESS_TOKEN", "GH_TOKEN", "GITHUB_TOKEN"]);
+  if (!tokenEnv) return {};
+  return {
+    github: {
+      type: "remote",
+      url: "https://api.githubcopilot.com/mcp/",
+      enabled: true,
+      oauth: false,
+      headers: {
+        Authorization: `Bearer {env:${tokenEnv}}`,
+      },
+      timeout: 10000,
+    },
+  };
+}
+
+function sentryPreset() {
+  const tokenEnv = firstNonEmptyEnv(["SENTRY_ACCESS_TOKEN", "SENTRY_AUTH_TOKEN"]);
+  if (tokenEnv) {
+    return {
+      sentry: {
+        type: "local",
+        command: ["npx", "-y", "@sentry/mcp-server@latest"],
+        environment: {
+          SENTRY_ACCESS_TOKEN: `{env:${tokenEnv}}`,
+        },
+        enabled: true,
+        timeout: 10000,
+      },
+    };
+  }
+  return {
+    sentry: {
+      type: "remote",
+      url: "https://mcp.sentry.dev/mcp",
+      enabled: true,
+      oauth: {},
+      timeout: 10000,
+    },
+  };
+}
+
+function sandboxPreset() {
+  if (!firstNonEmptyEnv(["T3_SANDBOX_URL"]) || !firstNonEmptyEnv(["T3_SANDBOX_TOKEN"])) {
+    return {};
+  }
+  return {
+    "t3-sandbox": {
+      type: "local",
+      command: ["t3-sandbox-mcp"],
+      environment: {
+        T3_SANDBOX_URL: "{env:T3_SANDBOX_URL}",
+        T3_SANDBOX_TOKEN: "{env:T3_SANDBOX_TOKEN}",
+      },
+      enabled: true,
+      timeout: 3700000,
+    },
+  };
+}
+
+function xcodePreset() {
+  if (
+    !firstNonEmptyEnv(["T3_XCODE_SSH_HOST"]) ||
+    !firstNonEmptyEnv(["T3_XCODE_REMOTE_WORKSPACE_ROOT"])
+  ) {
+    return {};
+  }
+  return {
+    xcodebuild: {
+      type: "local",
+      command: ["t3-xcode-mcp"],
+      enabled: true,
+      timeout: 3700000,
+    },
+  };
+}
+
+function addPresetEntries(target) {
+  const raw = (process.env.T3_OPENCODE_MCP_PRESETS || "").trim();
+  if (!raw) return;
+
+  const presetNames = raw
+    .split(",")
+    .map((item) => item.trim().toLowerCase())
+    .filter(Boolean);
+  if (presetNames.includes("none") || presetNames.includes("off") || presetNames.includes("0")) {
+    return;
+  }
+
+  for (const name of presetNames) {
+    if (name === "context7") {
+      addMissingEntries(target, context7Preset());
+      continue;
+    }
+    if (name === "github") {
+      addMissingEntries(target, githubPreset());
+      continue;
+    }
+    if (name === "sentry") {
+      addMissingEntries(target, sentryPreset());
+      continue;
+    }
+    const preset = mcpPresets[name];
+    if (!preset) {
+      throw new Error(`Unknown T3_OPENCODE_MCP_PRESETS entry: ${name}`);
+    }
+    addMissingEntries(target, preset);
   }
 }
 
@@ -172,6 +354,15 @@ function desiredMcpServers() {
   }
 
   addCloudflareEntries(desired);
+  addPresetEntries(desired);
+  if (reconcileManaged) {
+    for (const name of managedMcpNames) desired.delete(name);
+    addObjectEntries(desired, sandboxPreset());
+    addObjectEntries(desired, xcodePreset());
+  } else {
+    addMissingEntries(desired, sandboxPreset());
+    addMissingEntries(desired, xcodePreset());
+  }
 
   const extraFile = process.env.T3_OPENCODE_MCP_SERVERS_FILE || "";
   if (extraFile) {
@@ -372,10 +563,50 @@ function ensureConfig(input, mcpServers) {
   return `${text.slice(0, mcpEnd)}${insert}${text.slice(mcpEnd)}`;
 }
 
+function reconcileManagedEntries(input, desired) {
+  if (!reconcileManaged || input.trim().length === 0) return input;
+  const rootStart = input.indexOf("{");
+  if (rootStart < 0) return input;
+  const rootEnd = findMatchingBrace(input, rootStart);
+  if (rootEnd < 0) return input;
+  const mcpProperty = findObjectProperty(input, rootStart, rootEnd, "mcp");
+  if (!mcpProperty || input[mcpProperty.valueStart] !== "{") return input;
+
+  const replacements = managedMcpNames.flatMap((name) => {
+    const property = findObjectProperty(
+      input,
+      mcpProperty.valueStart,
+      mcpProperty.valueEnd,
+      name,
+    );
+    if (!property) return [];
+    const value = desired.get(name) || {
+      type: "local",
+      command: [name === "t3-sandbox" ? "t3-sandbox-mcp" : "t3-xcode-mcp"],
+      enabled: false,
+    };
+    return [{ ...property, value: renderEntryValue(value) }];
+  });
+  return replacements
+    .sort((left, right) => right.valueStart - left.valueStart)
+    .reduce(
+      (text, replacement) =>
+        `${text.slice(0, replacement.valueStart)}${replacement.value}${text.slice(replacement.valueEnd + 1)}`,
+      input,
+    );
+}
+
 fs.mkdirSync(path.dirname(configPath), { recursive: true });
 const before = fs.existsSync(configPath) ? fs.readFileSync(configPath, "utf8") : "";
-const after = ensureConfig(before, desiredMcpServers());
+const desired = desiredMcpServers();
+const after = ensureConfig(reconcileManagedEntries(before, desired), desired);
 if (after !== before) {
-  fs.writeFileSync(configPath, after, { mode: 0o600 });
+  const temporary = path.join(path.dirname(configPath), `.${path.basename(configPath)}.${process.pid}.tmp`);
+  try {
+    fs.writeFileSync(temporary, after, { mode: 0o600 });
+    fs.renameSync(temporary, configPath);
+  } finally {
+    fs.rmSync(temporary, { force: true });
+  }
   console.log(`Provisioned OpenCode MCP servers in ${configPath}`);
 }

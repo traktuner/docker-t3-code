@@ -17,6 +17,11 @@ proxy = false
 internal_host = "127.0.0.1"
 internal_port = 13773
 admin_ttl = "2m"
+web_helper = false
+web_helper_host = "0.0.0.0"
+web_helper_port = 13774
+web_helper_token = ""
+web_helper_commands_json = ""
 
 [updates]
 # Keep T3 itself current on each container start. Provider CLIs are baked into
@@ -108,11 +113,13 @@ config_dir_source = ""
 # preserve-mcp mirrors config_dir_source but keeps runtime-added MCP servers.
 # Other modes: mirror, merge, seed, none.
 config_sync_mode = "preserve-mcp"
-# Values: all/1, core, docs, off/0.
-cloudflare_mcp = "all"
+# Values: 1/core, docs, all, api, token, off/0.
+cloudflare_mcp = "core"
+cloudflare_auth = "auto"
+mcp_presets = "context7"
 mcp_servers_file = ""
 config_source = ""
-config_path = "/data/home/.config/opencode/opencode.json"
+config_path = "/data/home/.config/opencode/opencode.jsonc"
 default_model = "openai/gpt-5"
 server_url = ""
 server_password = ""
@@ -127,6 +134,21 @@ sensitive = true
 [[providers.opencode.env]]
 name = "LUMO_API_KEY"
 from_env = "LUMO_API_KEY"
+sensitive = true
+
+[[providers.opencode.env]]
+name = "CLOUDFLARE_API_TOKEN"
+from_env = "CLOUDFLARE_API_TOKEN"
+sensitive = true
+
+[[providers.opencode.env]]
+name = "GITHUB_PERSONAL_ACCESS_TOKEN"
+from_env = "GITHUB_PERSONAL_ACCESS_TOKEN"
+sensitive = true
+
+[[providers.opencode.env]]
+name = "CONTEXT7_API_KEY"
+from_env = "CONTEXT7_API_KEY"
 sensitive = true
 
 [[providers.opencode.env]]

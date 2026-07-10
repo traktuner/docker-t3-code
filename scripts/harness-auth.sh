@@ -23,6 +23,11 @@ Usage:
   t3-auth grok login           # xAI/Grok included usage via device auth
   t3-auth grok env             # report env-based Grok auth presence
 
+  t3-auth cursor login         # Cursor subscription browser auth
+  t3-auth cursor status
+  t3-auth cursor logout
+  t3-auth cursor env           # report env-based Cursor auth presence
+
   t3-auth gh login             # GitHub CLI browser/device auth
   t3-auth gh token             # persist GH_TOKEN or GITHUB_TOKEN
   t3-auth gh status
@@ -30,9 +35,12 @@ Usage:
   t3-auth gh logout
 
   t3-auth opencode mcp-list
+  t3-auth opencode mcp-auth-list
   t3-auth opencode mcp-auth cloudflare
   t3-auth opencode mcp-debug cloudflare
   t3-auth opencode mcp-logout cloudflare
+
+  t3-auth doctor
 
 API keys are intentionally not the default login path because they normally use
 API billing instead of included subscription usage.
@@ -43,6 +51,9 @@ provider="${1:-}"
 action="${2:-login}"
 
 case "$provider" in
+  doctor)
+    exec t3-doctor
+    ;;
   codex)
     export CODEX_HOME="${CODEX_HOME:-/data/codex}"
     mkdir -p "$CODEX_HOME"
@@ -128,6 +139,33 @@ case "$provider" in
         ;;
     esac
     ;;
+  cursor)
+    export HOME="${HOME:-/data/home}"
+    mkdir -p "$HOME"
+    case "$action" in
+      login)
+        exec agent login
+        ;;
+      status)
+        exec agent status
+        ;;
+      logout)
+        exec agent logout
+        ;;
+      env)
+        if [[ -n "${CURSOR_API_KEY:-}" ]]; then
+          echo "CURSOR_API_KEY is set; Cursor Agent can use API-key auth."
+        else
+          echo "CURSOR_API_KEY is not set. Use t3-auth cursor login for subscription auth."
+          exit 1
+        fi
+        ;;
+      *)
+        usage >&2
+        exit 2
+        ;;
+    esac
+    ;;
   gh|github)
     export HOME="${HOME:-/data/home}"
     export XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
@@ -191,6 +229,9 @@ case "$provider" in
     case "$action" in
       mcp-list)
         exec opencode mcp list
+        ;;
+      mcp-auth-list)
+        exec opencode mcp auth list
         ;;
       mcp-auth)
         exec opencode mcp auth "$mcp_server"

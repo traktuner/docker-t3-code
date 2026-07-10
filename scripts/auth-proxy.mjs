@@ -13,6 +13,12 @@ const LISTEN_PORT = Number.parseInt(
 );
 const UPSTREAM_HOST = process.env.T3_AUTH_PROXY_UPSTREAM_HOST || "127.0.0.1";
 const UPSTREAM_PORT = Number.parseInt(process.env.T3_AUTH_PROXY_UPSTREAM_PORT || "13773", 10);
+const AUTH_HELPER_ENABLED = process.env.T3_AUTH_WEB_HELPER === "1";
+const AUTH_HELPER_HOST =
+  process.env.T3_AUTH_WEB_HELPER_PROXY_HOST ||
+  (process.env.T3_AUTH_WEB_HELPER_HOST === "0.0.0.0" ? "127.0.0.1" : process.env.T3_AUTH_WEB_HELPER_HOST) ||
+  "127.0.0.1";
+const AUTH_HELPER_PORT = Number.parseInt(process.env.T3_AUTH_WEB_HELPER_PORT || "13774", 10);
 const T3CODE_HOME = process.env.T3CODE_HOME || "/data/t3";
 const ADMIN_TTL =
   process.env.T3_AUTH_PROXY_ADMIN_TTL || process.env.T3_AUTH_PROXY_PAIRING_TTL || "2m";
@@ -51,6 +57,14 @@ function filterHeaders(headers, extra = {}) {
   }
   next.host = `${UPSTREAM_HOST}:${UPSTREAM_PORT}`;
   return { ...next, ...extra };
+}
+
+function filterResponseHeaders(headers) {
+  const next = {};
+  for (const [name, value] of Object.entries(headers)) {
+    if (!hopByHopHeaders.has(name.toLowerCase())) next[name] = value;
+  }
+  return next;
 }
 
 function responseSetCookies(headers) {
@@ -228,16 +242,20 @@ async function ensureBrowserSession(req, res) {
 }
 
 function proxyHttp(req, res) {
+  proxyHttpTo(req, res, UPSTREAM_HOST, UPSTREAM_PORT);
+}
+
+function proxyHttpTo(req, res, hostname, port) {
   const upstreamReq = http.request(
     {
-      hostname: UPSTREAM_HOST,
-      port: UPSTREAM_PORT,
+      hostname,
+      port,
       method: req.method,
       path: req.url,
-      headers: filterHeaders(req.headers),
+      headers: filterHeaders(req.headers, { host: `${hostname}:${port}` }),
     },
     (upstreamRes) => {
-      res.writeHead(upstreamRes.statusCode || 502, upstreamRes.headers);
+      res.writeHead(upstreamRes.statusCode || 502, filterResponseHeaders(upstreamRes.headers));
       upstreamRes.pipe(res);
     },
   );
@@ -246,7 +264,7 @@ function proxyHttp(req, res) {
     if (!res.headersSent) {
       res.writeHead(502, { "content-type": "text/plain; charset=utf-8" });
     }
-    res.end(`T3 upstream unavailable: ${error.message}\n`);
+    res.end(`Upstream unavailable: ${error.message}\n`);
   });
 
   req.pipe(upstreamReq);
@@ -282,6 +300,16 @@ function proxyUpgrade(req, socket, head) {
 }
 
 const server = http.createServer((req, res) => {
+  if (
+    AUTH_HELPER_ENABLED &&
+    (req.url === "/auth-tools" ||
+      req.url?.startsWith("/auth-tools?") ||
+      req.url?.startsWith("/api/t3-auth-helper/"))
+  ) {
+    proxyHttpTo(req, res, AUTH_HELPER_HOST, AUTH_HELPER_PORT);
+    return;
+  }
+
   if (req.method === "GET" && req.url?.startsWith("/api/auth/session")) {
     ensureBrowserSession(req, res).catch((error) => {
       console.warn(`T3 auth proxy session handling failed: ${error.message}`);

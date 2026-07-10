@@ -9,3 +9,11 @@ fi
 
 port="${T3_SERVER_PORT:-3773}"
 curl -fsS "http://127.0.0.1:${port}/" >/dev/null
+
+if [[ "${T3_OPENCODE_MANAGED_SERVER:-0}" == "1" ]]; then
+  curl -fsS "http://${T3_OPENCODE_MANAGED_HOST:-127.0.0.1}:${T3_OPENCODE_MANAGED_PORT:-4096}/global/health" >/dev/null
+fi
+
+if [[ "${T3_AUTH_WEB_HELPER:-0}" == "1" ]]; then
+  curl -fsS "http://127.0.0.1:${T3_AUTH_WEB_HELPER_PORT:-13774}/auth-tools" >/dev/null
+fi

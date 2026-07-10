@@ -8,10 +8,10 @@ Usage:
   bash scripts/t3code-mcp-auth-over-ssh.sh [ssh-host] -- <container-auth-command...>
 
 Examples:
-  bash scripts/t3code-mcp-auth-over-ssh.sh slvpdocker01 cloudflare
-  bash scripts/t3code-mcp-auth-over-ssh.sh slvpdocker01 cloudflare-bindings
-  bash scripts/t3code-mcp-auth-over-ssh.sh slvpdocker01 -- t3-auth opencode mcp-auth cloudflare
-  bash scripts/t3code-mcp-auth-over-ssh.sh slvpdocker01 -- codex mcp login cloudflare
+  bash scripts/t3code-mcp-auth-over-ssh.sh docker-host cloudflare
+  bash scripts/t3code-mcp-auth-over-ssh.sh docker-host cloudflare-bindings
+  bash scripts/t3code-mcp-auth-over-ssh.sh docker-host -- t3-auth opencode mcp-auth cloudflare
+  bash scripts/t3code-mcp-auth-over-ssh.sh docker-host -- codex mcp login cloudflare
 
 Environment:
   T3_CONTAINER_NAME=t3code
@@ -24,10 +24,15 @@ if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
   exit 0
 fi
 
-ssh_host="slvpdocker01"
+ssh_host="${T3_DOCKER_SSH_HOST:-}"
 if [[ $# -gt 0 && "${1:-}" != "--" ]]; then
   ssh_host="$1"
   shift
+fi
+if [[ -z "$ssh_host" ]]; then
+  echo "Missing SSH host. Pass it as the first argument or set T3_DOCKER_SSH_HOST." >&2
+  usage >&2
+  exit 2
 fi
 
 container_name="${T3_CONTAINER_NAME:-t3code}"

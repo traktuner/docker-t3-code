@@ -24,6 +24,48 @@ PROVIDER_INSTANCE_IDS = {
     "opencode": "opencode",
 }
 
+SANDBOX_PROVIDER_ENV = [
+    {"name": "T3_SANDBOX_URL", "from_env": "T3_SANDBOX_URL"},
+    {
+        "name": "T3_SANDBOX_TOKEN",
+        "from_env": "T3_SANDBOX_TOKEN",
+        "sensitive": True,
+    },
+]
+
+XCODE_PROVIDER_ENV = [
+    {"name": "T3_XCODE_SSH_HOST", "from_env": "T3_XCODE_SSH_HOST"},
+    {"name": "T3_XCODE_SSH_PORT", "from_env": "T3_XCODE_SSH_PORT"},
+    {
+        "name": "T3_XCODE_SSH_IDENTITY_FILE",
+        "from_env": "T3_XCODE_SSH_IDENTITY_FILE",
+    },
+    {
+        "name": "T3_XCODE_SSH_KNOWN_HOSTS",
+        "from_env": "T3_XCODE_SSH_KNOWN_HOSTS",
+    },
+    {
+        "name": "T3_XCODE_SSH_OPTIONS_JSON",
+        "from_env": "T3_XCODE_SSH_OPTIONS_JSON",
+    },
+    {
+        "name": "T3_XCODE_LOCAL_WORKSPACE_ROOT",
+        "from_env": "T3_XCODE_LOCAL_WORKSPACE_ROOT",
+    },
+    {
+        "name": "T3_XCODE_REMOTE_WORKSPACE_ROOT",
+        "from_env": "T3_XCODE_REMOTE_WORKSPACE_ROOT",
+    },
+    {
+        "name": "T3_XCODE_DERIVED_DATA_ROOT",
+        "from_env": "T3_XCODE_DERIVED_DATA_ROOT",
+    },
+    {
+        "name": "T3_XCODE_ENABLED_WORKFLOWS",
+        "from_env": "T3_XCODE_ENABLED_WORKFLOWS",
+    },
+]
+
 DEFAULT_PROVIDER_ENV = {
     "codex": [
         {"name": "OPENAI_API_KEY", "from_env": "OPENAI_API_KEY", "sensitive": True},
@@ -32,6 +74,8 @@ DEFAULT_PROVIDER_ENV = {
         {"name": "OPENAI_BASE_URL", "from_env": "OPENAI_BASE_URL"},
         {"name": "OPENAI_ORG_ID", "from_env": "OPENAI_ORG_ID"},
         {"name": "OPENAI_PROJECT_ID", "from_env": "OPENAI_PROJECT_ID"},
+        *SANDBOX_PROVIDER_ENV,
+        *XCODE_PROVIDER_ENV,
     ],
     "claude": [
         {"name": "ANTHROPIC_API_KEY", "from_env": "ANTHROPIC_API_KEY", "sensitive": True},
@@ -42,22 +86,41 @@ DEFAULT_PROVIDER_ENV = {
         {"name": "ANTHROPIC_DEFAULT_SONNET_MODEL", "from_env": "ANTHROPIC_DEFAULT_SONNET_MODEL"},
         {"name": "ANTHROPIC_DEFAULT_HAIKU_MODEL", "from_env": "ANTHROPIC_DEFAULT_HAIKU_MODEL"},
         {"name": "CLAUDE_CODE_SUBAGENT_MODEL", "from_env": "CLAUDE_CODE_SUBAGENT_MODEL"},
+        *SANDBOX_PROVIDER_ENV,
+        *XCODE_PROVIDER_ENV,
     ],
     "opencode": [
         {"name": "OPENCODE_API_KEY", "from_env": "OPENCODE_API_KEY", "sensitive": True},
         {"name": "LUMO_API_KEY", "from_env": "LUMO_API_KEY", "sensitive": True},
+        {"name": "CLOUDFLARE_API_TOKEN", "from_env": "CLOUDFLARE_API_TOKEN", "sensitive": True},
+        {"name": "CF_API_TOKEN", "from_env": "CF_API_TOKEN", "sensitive": True},
+        {"name": "GITHUB_PERSONAL_ACCESS_TOKEN", "from_env": "GITHUB_PERSONAL_ACCESS_TOKEN", "sensitive": True},
+        {"name": "GH_TOKEN", "from_env": "GH_TOKEN", "sensitive": True},
+        {"name": "GITHUB_TOKEN", "from_env": "GITHUB_TOKEN", "sensitive": True},
+        {"name": "CONTEXT7_API_KEY", "from_env": "CONTEXT7_API_KEY", "sensitive": True},
         {"name": "OPENAI_API_KEY", "from_env": "OPENAI_API_KEY", "sensitive": True},
         {"name": "ANTHROPIC_API_KEY", "from_env": "ANTHROPIC_API_KEY", "sensitive": True},
         {"name": "OPENROUTER_API_KEY", "from_env": "OPENROUTER_API_KEY", "sensitive": True},
         {"name": "GEMINI_API_KEY", "from_env": "GEMINI_API_KEY", "sensitive": True},
         {"name": "GOOGLE_GENERATIVE_AI_API_KEY", "from_env": "GOOGLE_GENERATIVE_AI_API_KEY", "sensitive": True},
         {"name": "XAI_API_KEY", "from_env": "XAI_API_KEY", "sensitive": True},
+        {"name": "SENTRY_ACCESS_TOKEN", "from_env": "SENTRY_ACCESS_TOKEN", "sensitive": True},
+        {"name": "SENTRY_AUTH_TOKEN", "from_env": "SENTRY_AUTH_TOKEN", "sensitive": True},
+        *SANDBOX_PROVIDER_ENV,
+        *XCODE_PROVIDER_ENV,
     ],
     "grok": [
         {"name": "GROK_DEPLOYMENT_KEY", "from_env": "GROK_DEPLOYMENT_KEY", "sensitive": True},
         {"name": "GROK_PROXY_URL", "from_env": "GROK_PROXY_URL"},
         {"name": "GROK_CHANNEL", "from_env": "GROK_CHANNEL"},
         {"name": "XAI_API_KEY", "from_env": "XAI_API_KEY", "sensitive": True},
+        *SANDBOX_PROVIDER_ENV,
+        *XCODE_PROVIDER_ENV,
+    ],
+    "cursor": [
+        {"name": "CURSOR_API_KEY", "from_env": "CURSOR_API_KEY", "sensitive": True},
+        *SANDBOX_PROVIDER_ENV,
+        *XCODE_PROVIDER_ENV,
     ],
 }
 
@@ -67,6 +130,39 @@ def read_toml(path: Path) -> dict:
         return {}
     with path.open("rb") as fh:
         return tomllib.load(fh)
+
+
+def read_json_object(path: Path) -> dict:
+    if not path.exists():
+        return {}
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise SystemExit(f"Refusing to overwrite invalid JSON in {path}: {exc}") from exc
+    if not isinstance(value, dict):
+        raise SystemExit(f"Refusing to overwrite non-object JSON in {path}")
+    return value
+
+
+def merge_managed(existing: dict, managed: dict) -> dict:
+    result = dict(existing)
+    for key, value in managed.items():
+        if isinstance(value, dict) and isinstance(result.get(key), dict):
+            result[key] = merge_managed(result[key], value)
+        else:
+            result[key] = value
+    return result
+
+
+def write_private_text(path: Path, content: str):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    try:
+        temporary.write_text(content, encoding="utf-8")
+        os.chmod(temporary, stat.S_IRUSR | stat.S_IWUSR)
+        os.replace(temporary, path)
+    finally:
+        temporary.unlink(missing_ok=True)
 
 
 def env_bool(name: str):
@@ -227,14 +323,15 @@ def normalize_env_entries(provider_key: str, configured_entries: list, instance_
         else:
             value = os.environ.get(str(from_env), "")
 
+        sensitive = to_bool(entry.get("sensitive"), looks_sensitive(name))
         if value == "" and not include_empty:
+            if sensitive:
+                (secrets_dir / secret_file_name(instance_id, name)).unlink(missing_ok=True)
             continue
 
-        sensitive = to_bool(entry.get("sensitive"), looks_sensitive(name))
         if sensitive:
             secret_path = secrets_dir / secret_file_name(instance_id, name)
-            secret_path.write_bytes(value.encode("utf-8"))
-            os.chmod(secret_path, stat.S_IRUSR | stat.S_IWUSR)
+            write_private_text(secret_path, value)
             rendered.append(
                 {
                     "name": name,
@@ -254,7 +351,7 @@ def provider_enabled(config: dict, provider_key: str, env_name: str, default: bo
     return env_or_cfg_bool(env_name, provider, "enabled", default)
 
 
-def provider_update_enabled(updates: dict, key: str, provider_is_enabled: bool, install_disabled: bool) -> bool:
+def provider_update_enabled(updates: dict, key: str, install_disabled: bool) -> bool:
     env_value = env_bool(f"T3_UPDATE_{key.upper()}")
     if env_value is not None:
         return env_value
@@ -267,7 +364,7 @@ def write_runtime_env(path: Path, values: dict):
     for key, value in values.items():
         escaped = str(value).replace("'", "'\"'\"'")
         lines.append(f"{key}='{escaped}'")
-    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    write_private_text(path, "\n".join(lines) + "\n")
 
 
 def main():
@@ -306,6 +403,19 @@ def main():
     auth_proxy_admin_ttl = str(
         env_or_cfg("T3_AUTH_PROXY_ADMIN_TTL", auth, "admin_ttl", "2m")
     )
+    auth_web_helper = env_or_cfg_bool("T3_AUTH_WEB_HELPER", auth, "web_helper", False)
+    auth_web_helper_host = str(
+        env_or_cfg("T3_AUTH_WEB_HELPER_HOST", auth, "web_helper_host", "0.0.0.0")
+    )
+    auth_web_helper_port = int(
+        env_or_cfg("T3_AUTH_WEB_HELPER_PORT", auth, "web_helper_port", 13774)
+    )
+    auth_web_helper_token = str(
+        env_or_cfg("T3_AUTH_WEB_HELPER_TOKEN", auth, "web_helper_token", "")
+    )
+    auth_web_helper_commands_json = str(
+        env_or_cfg("T3_AUTH_WEB_HELPER_COMMANDS_JSON", auth, "web_helper_commands_json", "")
+    )
 
     codex_enabled = provider_enabled(config, "codex", "T3_PROVIDER_CODEX", True)
     claude_enabled = provider_enabled(config, "claude", "T3_PROVIDER_CLAUDE", True)
@@ -340,18 +450,18 @@ def main():
             "T3_OPENCODE_CONFIG_PATH",
             opencode_cfg,
             "config_path",
-            "/data/home/.config/opencode/opencode.json",
+            "/data/home/.config/opencode/opencode.jsonc",
         )
     )
     opencode_config_effective = ""
+    opencode_config_source_file = ""
     if opencode_config_content is not None:
         opencode_config_file = Path(opencode_config_path)
-        opencode_config_file.parent.mkdir(parents=True, exist_ok=True)
-        opencode_config_file.write_text(str(opencode_config_content), encoding="utf-8")
-        os.chmod(opencode_config_file, stat.S_IRUSR | stat.S_IWUSR)
+        write_private_text(opencode_config_file, str(opencode_config_content))
         opencode_config_effective = opencode_config_path
     elif opencode_config_source is not None:
-        opencode_config_effective = str(opencode_config_source)
+        opencode_config_effective = opencode_config_path
+        opencode_config_source_file = str(opencode_config_source)
     elif env_or_cfg_optional("T3_OPENCODE_CONFIG_PATH", opencode_cfg, "config_path") is not None:
         opencode_config_effective = opencode_config_path
 
@@ -386,6 +496,12 @@ def main():
             if not isinstance(configured_mcp_servers, dict):
                 raise SystemExit("providers.opencode.mcp_servers must be a TOML table")
             opencode_mcp_servers_json = json.dumps(configured_mcp_servers, separators=(",", ":"))
+    opencode_mcp_presets = str(
+        env_or_cfg("T3_OPENCODE_MCP_PRESETS", opencode_cfg, "mcp_presets", "context7")
+    )
+    opencode_cloudflare_auth = str(
+        env_or_cfg("T3_OPENCODE_CLOUDFLARE_AUTH", opencode_cfg, "cloudflare_auth", "auto")
+    )
 
     provider_default_models = dict(PROVIDER_DEFAULT_MODELS)
     provider_default_models["opencode"] = str(
@@ -496,7 +612,7 @@ def main():
         "codex",
     )
 
-    settings = {
+    managed_settings = {
         "enableProviderUpdateChecks": env_or_cfg_bool(
             "T3_ENABLE_PROVIDER_UPDATE_CHECKS",
             updates,
@@ -512,10 +628,6 @@ def main():
             "new_worktrees_start_from_origin",
             False,
         ),
-        "textGenerationModelSelection": {
-            "instanceId": first_enabled,
-            "model": provider_default_models.get(first_enabled, "gpt-5.4-mini"),
-        },
         "providers": {
             "codex": provider_instances["codex"]["config"],
             "claudeAgent": provider_instances["claudeAgent"]["config"],
@@ -527,8 +639,17 @@ def main():
         "providerInstances": provider_instances,
     }
 
-    settings_path.write_text(json.dumps(settings, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    os.chmod(settings_path, stat.S_IRUSR | stat.S_IWUSR)
+    settings = merge_managed(read_json_object(settings_path), managed_settings)
+    current_selection = settings.get("textGenerationModelSelection")
+    selected_instance = current_selection.get("instanceId") if isinstance(current_selection, dict) else None
+    selected_provider = settings["providerInstances"].get(selected_instance, {})
+    if not isinstance(selected_provider, dict) or selected_provider.get("enabled") is not True:
+        settings["textGenerationModelSelection"] = {
+            "instanceId": first_enabled,
+            "model": provider_default_models.get(first_enabled, "gpt-5.4-mini"),
+        }
+
+    write_private_text(settings_path, json.dumps(settings, indent=2, sort_keys=True) + "\n")
 
     auto_update = env_or_cfg_bool("T3_AUTO_UPDATE", updates, "on_start", True)
     install_disabled = env_or_cfg_bool(
@@ -550,13 +671,18 @@ def main():
         "T3_AUTH_PROXY_INTERNAL_HOST": auth_proxy_internal_host,
         "T3_AUTH_PROXY_INTERNAL_PORT": str(auth_proxy_internal_port),
         "T3_AUTH_PROXY_ADMIN_TTL": auth_proxy_admin_ttl,
+        "T3_AUTH_WEB_HELPER": "1" if auth_web_helper else "0",
+        "T3_AUTH_WEB_HELPER_HOST": auth_web_helper_host,
+        "T3_AUTH_WEB_HELPER_PORT": str(auth_web_helper_port),
+        "T3_AUTH_WEB_HELPER_TOKEN": auth_web_helper_token,
+        "T3_AUTH_WEB_HELPER_COMMANDS_JSON": auth_web_helper_commands_json,
         "T3_AUTO_UPDATE_EFFECTIVE": "1" if auto_update else "0",
         "T3_UPDATE_T3": "1" if env_or_cfg_bool("T3_UPDATE_T3", updates, "t3", True) else "0",
-        "T3_UPDATE_CODEX": "1" if provider_update_enabled(updates, "codex", codex_enabled, install_disabled) else "0",
-        "T3_UPDATE_CLAUDE": "1" if provider_update_enabled(updates, "claude", claude_enabled, install_disabled) else "0",
-        "T3_UPDATE_CURSOR": "1" if provider_update_enabled(updates, "cursor", cursor_enabled, install_disabled) else "0",
-        "T3_UPDATE_GROK": "1" if provider_update_enabled(updates, "grok", grok_enabled, install_disabled) else "0",
-        "T3_UPDATE_OPENCODE": "1" if provider_update_enabled(updates, "opencode", opencode_enabled, install_disabled) else "0",
+        "T3_UPDATE_CODEX": "1" if provider_update_enabled(updates, "codex", install_disabled) else "0",
+        "T3_UPDATE_CLAUDE": "1" if provider_update_enabled(updates, "claude", install_disabled) else "0",
+        "T3_UPDATE_CURSOR": "1" if provider_update_enabled(updates, "cursor", install_disabled) else "0",
+        "T3_UPDATE_GROK": "1" if provider_update_enabled(updates, "grok", install_disabled) else "0",
+        "T3_UPDATE_OPENCODE": "1" if provider_update_enabled(updates, "opencode", install_disabled) else "0",
         "T3_PROVIDER_CODEX": "1" if codex_enabled else "0",
         "T3_PROVIDER_CLAUDE": "1" if claude_enabled else "0",
         "T3_PROVIDER_CURSOR": "1" if cursor_enabled else "0",
@@ -572,6 +698,8 @@ def main():
         "T3_OPENCODE_CLOUDFLARE_MCP": str(
             env_or_cfg("T3_OPENCODE_CLOUDFLARE_MCP", opencode_cfg, "cloudflare_mcp", "1")
         ),
+        "T3_OPENCODE_CLOUDFLARE_AUTH": opencode_cloudflare_auth,
+        "T3_OPENCODE_MCP_PRESETS": opencode_mcp_presets,
         "T3_OPENCODE_MCP_SERVERS_FILE": env_or_cfg_optional(
             "T3_OPENCODE_MCP_SERVERS_FILE",
             opencode_cfg,
@@ -583,6 +711,7 @@ def main():
         "T3_OPENCODE_MANAGED_HOST": opencode_managed_host,
         "T3_OPENCODE_MANAGED_PORT": str(opencode_managed_port),
         "T3_OPENCODE_CONFIG": opencode_config_effective,
+        "T3_OPENCODE_CONFIG_SOURCE_FILE": opencode_config_source_file,
     }
     runtime_env_path.parent.mkdir(parents=True, exist_ok=True)
     write_runtime_env(runtime_env_path, runtime_values)

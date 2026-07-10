@@ -228,7 +228,7 @@ with `Contents`, `Issues`, and `Pull requests` set to read/write. Then configure
 
 ```bash
 T3_ISSUE_WORKER_GITHUB_TOKEN=github_pat_...
-T3_ISSUE_WORKER_MODEL=proton/lumo-plus-v1
+T3_ISSUE_WORKER_MODEL=proton/lumo-max
 T3_SANDBOX_URL=http://t3-sandbox-gateway:8090
 T3_SANDBOX_TOKEN=...
 docker compose --profile issue-worker up -d
@@ -287,9 +287,9 @@ T3_PROVIDER_GROK=0
 T3_PROVIDER_OPENCODE=1
 T3_OPENCODE_MANAGED_SERVER=1
 T3_OPENCODE_CONFIG_SOURCE=/config/opencode.lumo.json
-T3_OPENCODE_DEFAULT_MODEL=proton/lumo-plus-v1
-T3_OPENCODE_CUSTOM_MODELS=proton/lumo-basic-v1,proton/lumo-plus-v1,proton/auto
-T3_OPENCODE_MODEL_ORDER=proton/lumo-plus-v1,proton/lumo-basic-v1,proton/auto
+T3_OPENCODE_DEFAULT_MODEL=proton/lumo-max
+T3_OPENCODE_CUSTOM_MODELS=proton/lumo-lite,proton/lumo-max
+T3_OPENCODE_MODEL_ORDER=proton/lumo-max,proton/lumo-lite
 LUMO_API_KEY=...
 ```
 
@@ -340,7 +340,7 @@ T3 model pickers can be filtered without changing provider configs:
 ```bash
 T3_OPENCODE_HIDDEN_MODELS=provider/model-a,provider/model-b
 T3_CODEX_HIDDEN_MODELS=gpt-old-model
-T3_PROVIDER_MODEL_PREFERENCES_JSON='{"opencode":{"hiddenModels":["provider/model-a"],"modelOrder":["proton/lumo-plus-v1"]}}'
+T3_PROVIDER_MODEL_PREFERENCES_JSON='{"opencode":{"hiddenModels":["provider/model-a"],"modelOrder":["proton/lumo-max"]}}'
 ```
 
 ## Persistence

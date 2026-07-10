@@ -106,7 +106,7 @@ function loadConfig() {
       process.env.T3_ISSUE_WORKER_REPOSITORIES || "",
     ),
     allowedActors: parseCsv(process.env.T3_ISSUE_WORKER_ALLOWED_ACTORS || ""),
-    model: process.env.T3_ISSUE_WORKER_MODEL || "proton/lumo-plus-v1",
+    model: process.env.T3_ISSUE_WORKER_MODEL || "proton/lumo-max",
     agent: process.env.T3_ISSUE_WORKER_AGENT || "github-issue-worker",
     promptSuffix: process.env.T3_ISSUE_WORKER_PROMPT_SUFFIX || "",
     branchPrefix: process.env.T3_ISSUE_WORKER_BRANCH_PREFIX || "t3-agent",

@@ -36,6 +36,16 @@ test("provisions global sandbox instructions and strict local-tool permissions i
   assert.equal(parsed.permission.webfetch, "allow");
   assert.equal(parsed.permission.bash, "deny");
   assert.equal(parsed.permission.read, "deny");
+  assert.deepEqual(parsed.permission.task, {
+    "*": "deny",
+    "researcher-basic": "allow",
+    "editor-basic": "allow",
+    "implementer-plus": "allow",
+    "reviewer-plus": "allow",
+    "voter-basic": "allow",
+    explore: "allow",
+    general: "allow",
+  });
   assert.equal(parsed.permission["t3-sandbox_*"], "allow");
   assert.equal(parsed.permission["xcodebuild_*"], "allow");
 });

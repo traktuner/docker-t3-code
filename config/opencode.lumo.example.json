@@ -1,8 +1,8 @@
 {
   "$schema": "https://opencode.ai/config.json",
   "enabled_providers": ["proton"],
-  "model": "proton/lumo-plus-v1",
-  "small_model": "proton/lumo-basic-v1",
+  "model": "proton/lumo-max",
+  "small_model": "proton/lumo-lite",
   "provider": {
     "proton": {
       "npm": "@ai-sdk/openai-compatible",
@@ -13,26 +13,19 @@
         "stream": false
       },
       "models": {
-        "auto": {
-          "name": "Lumo Auto",
+        "lumo-lite": {
+          "name": "Lumo Lite",
           "tool_call": true,
           "attachment": true,
           "modalities": { "input": ["text", "image"], "output": ["text"] },
-          "limit": { "context": 120000, "output": 16384 }
+          "limit": { "context": 111072, "output": 16384 }
         },
-        "lumo-basic-v1": {
-          "name": "Lumo Basic",
+        "lumo-max": {
+          "name": "Lumo Max",
           "tool_call": true,
           "attachment": true,
           "modalities": { "input": ["text", "image"], "output": ["text"] },
-          "limit": { "context": 120000, "output": 16384 }
-        },
-        "lumo-plus-v1": {
-          "name": "Lumo Plus",
-          "tool_call": true,
-          "attachment": true,
-          "modalities": { "input": ["text", "image"], "output": ["text"] },
-          "limit": { "context": 120000, "output": 16384 }
+          "limit": { "context": 111072, "output": 16384 }
         }
       }
     }

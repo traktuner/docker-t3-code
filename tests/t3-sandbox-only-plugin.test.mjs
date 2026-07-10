@@ -15,7 +15,7 @@ const pluginModule = await import(
 
 test("hard-blocks local tools but leaves the sandbox-backed bash alias available", async () => {
   const hooks = await pluginModule.T3SandboxOnly();
-  for (const tool of ["read", "edit", "write", "grep", "glob", "task"]) {
+  for (const tool of ["read", "edit", "write", "grep", "glob"]) {
     await assert.rejects(
       hooks["tool.execute.before"]({ tool }, { args: {} }),
       /Do not retry it.*sandbox-backed bash/,
@@ -23,6 +23,7 @@ test("hard-blocks local tools but leaves the sandbox-backed bash alias available
   }
   for (const tool of [
     "bash",
+    "task",
     "t3-sandbox_sandbox_create",
     "t3-sandbox_sandbox_exec",
     "xcodebuild_build",

@@ -9,7 +9,6 @@ const blockedLocalTools = new Set([
   "multiedit",
   "patch",
   "read",
-  "task",
   "write",
 ]);
 

@@ -273,7 +273,7 @@ provision_provider_config_dirs() {
   provision_opencode_config_dir
   provision_opencode_mcp
   provision_optional_config_dir "Codex" "$codex_source" "${CODEX_HOME:-/data/codex}" "${T3_PROVIDER_CODEX:-1}"
-  provision_optional_config_dir "Claude" "$claude_source" "${T3_CLAUDE_HOME_PATH:-/data/claude-home}" "${T3_PROVIDER_CLAUDE:-1}"
+  provision_optional_config_dir "Claude" "$claude_source" "${T3_CLAUDE_HOME_PATH:-/data/claude-home}/.claude" "${T3_PROVIDER_CLAUDE:-1}"
   provision_optional_config_dir "Grok" "$grok_source" "${GROK_CONFIG_DIR:-$HOME/.grok}" "${T3_PROVIDER_GROK:-1}"
   python3 /opt/t3-docker/provision-harness-instructions.py
 }

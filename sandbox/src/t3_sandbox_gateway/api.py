@@ -84,9 +84,14 @@ def create_app(
     async def create_sandbox(request: CreateSandboxRequest) -> SandboxView:
         try:
             return _view(await service.create(request))
-        except (WorkspaceBusyError, SandboxLimitError) as exc:
+        except (WorkspaceBusyError, SandboxLimitError, SandboxStateError) as exc:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
-        except (ValueError, WorkspacePathError, DevContainerError, LifecycleError) as exc:
+        except (
+            ValueError,
+            WorkspacePathError,
+            DevContainerError,
+            LifecycleError,
+        ) as exc:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
     @app.get(
@@ -156,4 +161,3 @@ def create_app(
 
 
 app = create_app()
-

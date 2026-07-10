@@ -147,8 +147,10 @@ ACP wrapper injects the same rule on the first prompt because Cursor only reads
 created or changed. With
 `T3_OPENCODE_SANDBOX_ONLY=1`, local read/edit/search/shell/subagent tools are
 denied both by configuration and by a pre-execution plugin, so agent-level
-permission overrides cannot bypass the boundary. The agent must perform
-repository work through `t3-sandbox`.
+permission overrides cannot bypass the boundary. The plugin exposes a
+sandbox-backed `bash` compatibility tool under the familiar name; it creates or
+reuses one sandbox per OpenCode session and sends every command through the
+gateway. All other repository work must use that alias or `t3-sandbox` MCP.
 
 ## Configuration
 

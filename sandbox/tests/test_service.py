@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -42,6 +43,18 @@ class FakeBackend:
         self.destroyed.append(upstream_id)
 
 
+class BlockingBackend(FakeBackend):
+    def __init__(self):
+        super().__init__()
+        self.started = asyncio.Event()
+        self.release = asyncio.Event()
+
+    async def create(self, **kwargs) -> str:
+        self.started.set()
+        await self.release.wait()
+        return await super().create(**kwargs)
+
+
 class FakeDevContainers:
     async def build(self, _workspace: Path) -> DevContainerPlan:
         return DevContainerPlan(
@@ -79,8 +92,10 @@ def settings(tmp_path: Path) -> Settings:
     )
 
 
-def service(tmp_path: Path) -> tuple[SandboxService, FakeBackend]:
-    backend = FakeBackend()
+def service(
+    tmp_path: Path, backend: FakeBackend | None = None
+) -> tuple[SandboxService, FakeBackend]:
+    backend = backend or FakeBackend()
     config = settings(tmp_path)
     return (
         SandboxService(
@@ -106,6 +121,44 @@ async def test_reuses_one_active_sandbox_per_workspace(tmp_path: Path):
     assert first.id == second.id
     assert backend.created == 1
     assert backend.renewed == [("upstream-1", 600)]
+
+
+@pytest.mark.asyncio
+async def test_concurrent_reuse_waits_for_the_first_creation(tmp_path: Path):
+    (tmp_path / "repo").mkdir()
+    backend = BlockingBackend()
+    subject, _backend = service(tmp_path, backend)
+    request = CreateSandboxRequest(workspace="/workspace/repo")
+
+    first_task = asyncio.create_task(subject.create(request))
+    await backend.started.wait()
+    second_task = asyncio.create_task(subject.create(request))
+    await asyncio.sleep(0)
+    backend.release.set()
+    first, second = await asyncio.gather(first_task, second_task)
+
+    assert first.id == second.id
+    assert backend.created == 1
+
+
+@pytest.mark.asyncio
+async def test_destroy_during_creation_cannot_reactivate_the_lease(tmp_path: Path):
+    (tmp_path / "repo").mkdir()
+    backend = BlockingBackend()
+    subject, _backend = service(tmp_path, backend)
+
+    creation = asyncio.create_task(
+        subject.create(CreateSandboxRequest(workspace="/workspace/repo"))
+    )
+    await backend.started.wait()
+    lease = subject.list()[0]
+    await subject.destroy(lease.id)
+    backend.release.set()
+
+    with pytest.raises(SandboxStateError, match="creation was cancelled"):
+        await creation
+    assert subject.store.get(lease.id).state == "destroyed"
+    assert backend.destroyed == ["upstream-1"]
 
 
 @pytest.mark.asyncio

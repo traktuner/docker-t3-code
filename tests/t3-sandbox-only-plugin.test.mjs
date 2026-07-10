@@ -102,3 +102,70 @@ test("routes bash into one reused sandbox per OpenCode session", async () => {
     else process.env.T3_SANDBOX_TOKEN = originalToken;
   }
 });
+
+test("waits for an already creating sandbox instead of failing with workspace busy", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalUrl = process.env.T3_SANDBOX_URL;
+  const originalToken = process.env.T3_SANDBOX_TOKEN;
+  const requests = [];
+  process.env.T3_SANDBOX_URL = "http://sandbox-gateway:8090";
+  process.env.T3_SANDBOX_TOKEN = "test-token";
+  globalThis.fetch = async (url, options = {}) => {
+    requests.push({ url: String(url), options });
+    if (options.method === "POST" && String(url).endsWith("/v1/sandboxes")) {
+      return new Response(JSON.stringify({ detail: "workspace overlaps active sandbox" }), {
+        status: 409,
+      });
+    }
+    if (String(url).endsWith("/v1/sandboxes")) {
+      return new Response(
+        JSON.stringify([
+          {
+            id: "22222222-2222-4222-8222-222222222222",
+            workspace: "/workspace/project",
+            state: "creating",
+          },
+        ]),
+        { status: 200 },
+      );
+    }
+    if (String(url).endsWith("/22222222-2222-4222-8222-222222222222")) {
+      return new Response(
+        JSON.stringify({
+          id: "22222222-2222-4222-8222-222222222222",
+          workspace: "/workspace/project",
+          state: "active",
+        }),
+        { status: 200 },
+      );
+    }
+    return new Response(
+      JSON.stringify({ exit_code: 0, stdout: "ready\n", stderr: "" }),
+      { status: 200 },
+    );
+  };
+
+  try {
+    const hooks = await pluginModule.T3SandboxOnly({
+      directory: "/workspace/project",
+      worktree: "/workspace/project",
+    });
+    const result = await hooks.tool.bash.execute(
+      { command: "pwd" },
+      {
+        sessionID: "session-concurrent",
+        directory: "/workspace/project",
+        worktree: "/workspace/project",
+      },
+    );
+
+    assert.equal(result.output, "ready\n");
+    assert.equal(requests.length, 4);
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (originalUrl === undefined) delete process.env.T3_SANDBOX_URL;
+    else process.env.T3_SANDBOX_URL = originalUrl;
+    if (originalToken === undefined) delete process.env.T3_SANDBOX_TOKEN;
+    else process.env.T3_SANDBOX_TOKEN = originalToken;
+  }
+});

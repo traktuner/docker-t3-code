@@ -62,6 +62,7 @@ class SandboxService:
             )
 
         selected_profile = self._profile(request.profile, workspace.host_path)
+        wait_for_lease_id: str | None = None
         async with self._reservation_lock:
             now = datetime.now(UTC)
             self.store.expire_due(now, self.settings.build_timeout_seconds)
@@ -71,32 +72,40 @@ class SandboxService:
                     request.reuse
                     and current.workspace == workspace.client_path
                     and current.profile == selected_profile
-                    and await self._is_reusable(current)
                 ):
-                    return self.store.get(current.id) or current
-                raise WorkspaceBusyError(
-                    f"workspace overlaps active sandbox: {current.workspace}"
+                    if current.state == "creating":
+                        wait_for_lease_id = current.id
+                    elif await self._is_reusable(current):
+                        return self.store.get(current.id) or current
+                if wait_for_lease_id is None:
+                    raise WorkspaceBusyError(
+                        f"workspace overlaps active sandbox: {current.workspace}"
+                    )
+            if wait_for_lease_id is None:
+                lease = Lease(
+                    id=str(uuid.uuid4()),
+                    upstream_id=None,
+                    workspace=workspace.client_path,
+                    host_path=str(workspace.host_path),
+                    profile=selected_profile,
+                    image=self.settings.base_image,
+                    state="creating",
+                    created_at=now,
+                    expires_at=now + timedelta(seconds=ttl_seconds),
+                    error=None,
                 )
-            lease = Lease(
-                id=str(uuid.uuid4()),
-                upstream_id=None,
-                workspace=workspace.client_path,
-                host_path=str(workspace.host_path),
-                profile=selected_profile,
-                image=self.settings.base_image,
-                state="creating",
-                created_at=now,
-                expires_at=now + timedelta(seconds=ttl_seconds),
-                error=None,
-            )
-            try:
-                self.store.create(lease, self.settings.max_sandboxes)
-            except SandboxCapacityError as exc:
-                raise SandboxLimitError(str(exc)) from exc
+                try:
+                    self.store.create(lease, self.settings.max_sandboxes)
+                except SandboxCapacityError as exc:
+                    raise SandboxLimitError(str(exc)) from exc
+
+        if wait_for_lease_id is not None:
+            return await self._wait_for_creation(wait_for_lease_id)
 
         upstream_id: str | None = None
         try:
             plan = await self._plan(selected_profile, workspace.host_path)
+            self._ensure_creation_pending(lease.id)
             environment = self._environment(workspace.client_path, plan)
             git_common = resolve_git_common_mount(
                 workspace.host_path,
@@ -117,25 +126,36 @@ class SandboxService:
                 environment=environment,
                 workspace_hash=workspace_hash,
             )
+            self._ensure_creation_pending(lease.id)
             await self._run_lifecycle(upstream_id, plan, workspace.client_path)
+            self._ensure_creation_pending(lease.id)
             await self.backend.renew(upstream_id, ttl_seconds)
-            return self.store.activate(
-                lease.id,
-                upstream_id,
-                plan.image,
-                datetime.now(UTC) + timedelta(seconds=ttl_seconds),
-            )
+            async with self._reservation_lock:
+                current = self.store.get(lease.id)
+                if current is not None and current.state == "creating":
+                    return self.store.activate(
+                        lease.id,
+                        upstream_id,
+                        plan.image,
+                        datetime.now(UTC) + timedelta(seconds=ttl_seconds),
+                    )
+            with suppress(Exception):
+                await self.backend.destroy(upstream_id)
+            upstream_id = None
+            raise SandboxStateError("sandbox creation was cancelled")
         except asyncio.CancelledError:
             if upstream_id is not None:
                 with suppress(Exception):
                     await self.backend.destroy(upstream_id)
-            self.store.set_state(lease.id, "failed", "request cancelled")
+            if (current := self.store.get(lease.id)) is not None and current.state == "creating":
+                self.store.set_state(lease.id, "failed", "request cancelled")
             raise
         except Exception as exc:
             if upstream_id is not None:
                 with suppress(Exception):
                     await self.backend.destroy(upstream_id)
-            self.store.set_state(lease.id, "failed", type(exc).__name__)
+            if (current := self.store.get(lease.id)) is not None and current.state == "creating":
+                self.store.set_state(lease.id, "failed", type(exc).__name__)
             raise
 
     async def execute(self, lease_id: str, request: ExecuteRequest) -> BackendExecution:
@@ -183,11 +203,13 @@ class SandboxService:
         )
 
     async def destroy(self, lease_id: str) -> Lease:
-        lease = self._required(lease_id)
+        async with self._reservation_lock:
+            lease = self._required(lease_id)
+            destroyed = self.store.set_state(lease.id, "destroyed")
         if lease.upstream_id is not None and lease.state in {"creating", "active", "unavailable"}:
             with suppress(Exception):
                 await self.backend.destroy(lease.upstream_id)
-        return self.store.set_state(lease.id, "destroyed")
+        return destroyed
 
     def list(self) -> list[Lease]:
         self.store.expire_due(datetime.now(UTC), self.settings.build_timeout_seconds)
@@ -295,6 +317,26 @@ class SandboxService:
         if lease.state != "active":
             self.store.set_state(lease.id, "active")
         return True
+
+    async def _wait_for_creation(self, lease_id: str) -> Lease:
+        deadline = asyncio.get_running_loop().time() + self.settings.build_timeout_seconds
+        while asyncio.get_running_loop().time() < deadline:
+            lease = self.store.get(lease_id)
+            if lease is None:
+                raise SandboxNotFoundError(lease_id)
+            if lease.state == "active":
+                return lease
+            if lease.state != "creating":
+                raise SandboxStateError(
+                    f"sandbox creation ended in state={lease.state}"
+                )
+            await asyncio.sleep(0.25)
+        raise SandboxStateError("timed out waiting for sandbox creation")
+
+    def _ensure_creation_pending(self, lease_id: str) -> None:
+        lease = self.store.get(lease_id)
+        if lease is None or lease.state != "creating":
+            raise SandboxStateError("sandbox creation was cancelled")
 
     def _required(self, lease_id: str) -> Lease:
         lease = self.store.get(lease_id)

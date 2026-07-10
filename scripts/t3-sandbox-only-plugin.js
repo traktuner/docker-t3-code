@@ -38,6 +38,9 @@ export const T3SandboxOnly = async ({ directory = "/workspace", worktree = "" } 
   );
   const sessionSandboxes = new Map();
 
+  const sleep = (milliseconds) =>
+    new Promise((resolve) => setTimeout(resolve, milliseconds));
+
   async function gateway(requestPath, options = {}, timeoutMs = 65_000) {
     if (!baseUrl || !token) {
       throw new Error("T3_SANDBOX_URL and T3_SANDBOX_TOKEN are required");
@@ -70,6 +73,32 @@ export const T3SandboxOnly = async ({ directory = "/workspace", worktree = "" } 
     return body;
   }
 
+  async function waitForConcurrentCreation(workspace, originalError) {
+    if (!(originalError instanceof SandboxGatewayError) || originalError.status !== 409) {
+      throw originalError;
+    }
+    const sandboxes = await gateway("/v1/sandboxes");
+    const current = sandboxes.find(
+      (sandbox) => sandbox.workspace === workspace && sandbox.state === "creating",
+    );
+    if (!current) throw originalError;
+
+    const deadline = Date.now() + createTimeoutMs;
+    while (Date.now() < deadline) {
+      const status = await gateway(
+        `/v1/sandboxes/${encodeURIComponent(current.id)}`,
+      );
+      if (status.state === "active") return status;
+      if (status.state !== "creating") {
+        throw new Error(
+          `Concurrent sandbox creation ended in state '${status.state}'`,
+        );
+      }
+      await sleep(500);
+    }
+    throw new Error("Timed out waiting for concurrent sandbox creation");
+  }
+
   function sandboxForSession(sessionID, workspace) {
     const current = sessionSandboxes.get(sessionID);
     if (current?.workspace === workspace) return current.promise;
@@ -81,10 +110,12 @@ export const T3SandboxOnly = async ({ directory = "/workspace", worktree = "" } 
         body: JSON.stringify({ workspace, profile: "auto", reuse: true }),
       },
       createTimeoutMs,
-    ).catch((error) => {
-      sessionSandboxes.delete(sessionID);
-      throw error;
-    });
+    )
+      .catch((error) => waitForConcurrentCreation(workspace, error))
+      .catch((error) => {
+        sessionSandboxes.delete(sessionID);
+        throw error;
+      });
     sessionSandboxes.set(sessionID, { workspace, promise });
     return promise;
   }

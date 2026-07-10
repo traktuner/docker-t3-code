@@ -167,6 +167,11 @@ Set
 and subagent tools while keeping sandbox, Xcode, and independently configured
 remote MCP tools available. A managed `tool.execute.before` plugin enforces the
 boundary even when a custom agent contains a broader `permission: allow` rule.
+The plugin replaces OpenCode's built-in `bash` definition with a sandbox-backed
+compatibility tool. A model may therefore call `bash` immediately, but that call
+automatically creates or reuses the session sandbox and never executes in the
+T3 control container. Other local tool definitions are marked unavailable and
+remain hard-blocked.
 This is enabled by default in the production infra example, but remains opt-in
 in the generic Compose files.
 See [`sandbox/README.md`](sandbox/README.md) for the lifecycle, security model,

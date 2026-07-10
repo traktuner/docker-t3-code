@@ -74,7 +74,7 @@ from_env = "ANTHROPIC_BASE_URL"
 
 [providers.cursor]
 enabled = true
-binary_path = "agent"
+binary_path = "t3-cursor-agent"
 api_endpoint = ""
 hidden_models = []
 model_order = []

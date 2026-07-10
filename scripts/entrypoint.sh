@@ -197,7 +197,8 @@ provision_opencode_mcp() {
     printf '{\n  "$schema": "https://opencode.ai/config.json"\n}\n' > "$config_path"
   fi
 
-  if [[ -n "${T3_SANDBOX_URL:-}" && "${T3_OPENCODE_SANDBOX_INSTRUCTIONS:-1}" == "1" ]]; then
+  local sandbox_instructions="${T3_HARNESS_SANDBOX_INSTRUCTIONS:-${T3_OPENCODE_SANDBOX_INSTRUCTIONS:-1}}"
+  if [[ -n "${T3_SANDBOX_URL:-}" && "$sandbox_instructions" == "1" ]]; then
     local instructions_file="$target_dir/t3-sandbox-instructions.md"
     install -m 0600 /opt/t3-docker/t3-sandbox-instructions.md "$instructions_file"
     export T3_OPENCODE_SANDBOX_INSTRUCTIONS_FILE="$instructions_file"
@@ -274,6 +275,7 @@ provision_provider_config_dirs() {
   provision_optional_config_dir "Codex" "$codex_source" "${CODEX_HOME:-/data/codex}" "${T3_PROVIDER_CODEX:-1}"
   provision_optional_config_dir "Claude" "$claude_source" "${T3_CLAUDE_HOME_PATH:-/data/claude-home}" "${T3_PROVIDER_CLAUDE:-1}"
   provision_optional_config_dir "Grok" "$grok_source" "${GROK_CONFIG_DIR:-$HOME/.grok}" "${T3_PROVIDER_GROK:-1}"
+  python3 /opt/t3-docker/provision-harness-instructions.py
 }
 
 install_npm_latest() {

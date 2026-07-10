@@ -18,7 +18,7 @@ test("hard-blocks local execution tools regardless of agent permissions", async 
   for (const tool of ["bash", "read", "edit", "write", "grep", "glob", "task"]) {
     await assert.rejects(
       hooks["tool.execute.before"]({ tool }, { args: {} }),
-      /Use the t3-sandbox MCP tools/,
+      /Do not retry it.*t3-sandbox_sandbox_create/,
     );
   }
 });

@@ -153,9 +153,16 @@ Set `T3_SANDBOX_URL`, `T3_SANDBOX_TOKEN_FILE`, and
 same `t3-sandbox` MCP tools for enabled OpenCode, Codex, Claude, Cursor, and Grok
 harnesses.
 
-For OpenCode, the container also installs a managed global instruction file so
-the model discovers and uses the sandbox without a per-chat prompt. Set
-`T3_OPENCODE_SANDBOX_INSTRUCTIONS=0` to disable that behavior. Set
+The container installs the same managed global rule for every enabled harness:
+OpenCode uses its configured instruction file, Codex uses
+`$CODEX_HOME/AGENTS.md`, Claude uses `~/.claude/CLAUDE.md`, and Grok uses
+`$GROK_CONFIG_DIR/AGENTS.md`. Cursor only supports repository-level rule files,
+so T3 uses a transparent ACP wrapper that adds the rule to the first prompt of
+each Cursor session without touching the repository. Existing user rules are
+preserved outside a marked managed block. Set
+`T3_HARNESS_SANDBOX_INSTRUCTIONS=0` to disable this behavior globally. The old
+`T3_OPENCODE_SANDBOX_INSTRUCTIONS` variable remains as a compatibility fallback.
+Set
 `T3_OPENCODE_SANDBOX_ONLY=1` to deny OpenCode's local filesystem, shell, edit,
 and subagent tools while keeping sandbox, Xcode, and independently configured
 remote MCP tools available. A managed `tool.execute.before` plugin enforces the
@@ -352,7 +359,7 @@ Then put the numeric output of `id -u` and `id -g` into `T3_UID` and `T3_GID` in
 - Codex uses `CODEX_HOME = /data/codex`. For included ChatGPT/Codex usage, use `t3-auth codex login` / `codex login --device-auth`. API-key auth is available but uses API billing.
 - Claude Code uses `/data/claude-home` for the provider process. Use `ANTHROPIC_API_KEY` for API-billed automation, or `CLAUDE_CODE_OAUTH_TOKEN` from `claude setup-token` for subscription-backed CI/container use.
 - GitHub CLI auth lives under `/data/home/.config/gh`. Use `t3-auth gh login` for the browser/device flow, `t3-auth gh token` to persist `GH_TOKEN`/`GITHUB_TOKEN`, and `t3-auth gh setup-git` when you want `git` to use the GitHub CLI credential helper.
-- Cursor Agent is installed from the official Cursor installer. Its binary is exposed as both `agent` and `cursor-agent`; T3's default Cursor binary path remains `agent`.
+- Cursor Agent is installed from the official Cursor installer. Its binary is exposed as both `agent` and `cursor-agent`; T3 starts it through `t3-cursor-agent`, which delegates to `T3_CURSOR_REAL_BINARY_PATH=agent` and injects the managed sandbox rule into ACP sessions.
 - Grok Build is installed from the official xAI installer. Only the `grok` binary is exposed in `/usr/local/bin` so it does not shadow Cursor's `agent` command. For containers, use `XAI_API_KEY` or `grok login --device-auth`; persisted Grok config/session state lives in `/data/home/.grok`.
 - OpenCode can either be spawned by T3 or started by the container wrapper as a managed local server. Use the managed server mode when you need an explicit OpenCode config file, because T3's native OpenCode spawn path controls the spawned server environment.
 - T3's native provider update checks are disabled by default through `enableProviderUpdateChecks=false` (`T3_ENABLE_PROVIDER_UPDATE_CHECKS=0`), so provider update notices and one-click update prompts should stay hidden. Re-enable them only if you intentionally want T3 to check agent CLI versions.

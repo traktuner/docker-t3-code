@@ -60,7 +60,8 @@ jobs:
             --config sandbox/pyproject.toml \
             sandbox/src sandbox/tests sandbox/render-opensandbox-config.py \
             sandbox/opensandbox-healthcheck.py \
-            scripts/configure-codex-mcp.py
+            scripts/configure-codex-mcp.py \
+            scripts/provision-harness-instructions.py
           uv run --project sandbox --extra test --frozen pytest -q sandbox/tests
           bash -n \
             scripts/entrypoint.sh scripts/harness-auth.sh scripts/healthcheck.sh \
@@ -73,6 +74,7 @@ jobs:
             sandbox/gateway-entrypoint.sh
           node --check \
             scripts/auth-proxy.mjs scripts/configure-cursor-mcp.mjs \
+            scripts/cursor-sandbox-wrapper.mjs \
             scripts/mcp-auth-helper.mjs scripts/provision-opencode-mcp.mjs \
             scripts/t3-sandbox-mcp.mjs scripts/t3-xcode-mcp.mjs \
             scripts/github-issue-worker-lib.mjs scripts/github-issue-worker.mjs \

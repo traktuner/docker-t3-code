@@ -562,7 +562,14 @@ def main():
             ),
             "config": {
                 "enabled": cursor_enabled,
-                "binaryPath": str(env_or_cfg("T3_CURSOR_BINARY_PATH", cursor_cfg, "binary_path", "agent")),
+                "binaryPath": str(
+                    env_or_cfg(
+                        "T3_CURSOR_BINARY_PATH",
+                        cursor_cfg,
+                        "binary_path",
+                        "t3-cursor-agent",
+                    )
+                ),
                 "apiEndpoint": str(env_or_cfg("T3_CURSOR_API_ENDPOINT", cursor_cfg, "api_endpoint", "")),
                 "customModels": env_or_cfg_list("T3_CURSOR_CUSTOM_MODELS", cursor_cfg, "custom_models"),
             },

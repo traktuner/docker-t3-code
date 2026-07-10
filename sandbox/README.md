@@ -122,7 +122,7 @@ T3_SANDBOX_URL=http://t3-sandbox-gateway:8090
 T3_SANDBOX_TOKEN_FILE=/run/t3-sandbox/gateway-token
 T3_SANDBOX_WORKSPACE=/workspace
 T3_SANDBOX_MCP_RECONCILE=1
-T3_OPENCODE_SANDBOX_INSTRUCTIONS=1
+T3_HARNESS_SANDBOX_INSTRUCTIONS=1
 T3_OPENCODE_SANDBOX_ONLY=1
 ```
 
@@ -140,8 +140,11 @@ An agent should create or reuse a sandbox before a build or tool-heavy task,
 run commands there, and destroy it when finished. Expired leases are also
 removed by OpenSandbox.
 
-When `T3_OPENCODE_SANDBOX_INSTRUCTIONS=1`, the main container adds a managed
-global OpenCode instruction file describing this lifecycle. With
+When `T3_HARNESS_SANDBOX_INSTRUCTIONS=1`, the main container adds this lifecycle
+as a managed native global rule for OpenCode, Codex, Claude, and Grok. Cursor's
+ACP wrapper injects the same rule on the first prompt because Cursor only reads
+`AGENTS.md` and `CLAUDE.md` from the repository root. No repository files are
+created or changed. With
 `T3_OPENCODE_SANDBOX_ONLY=1`, local read/edit/search/shell/subagent tools are
 denied both by configuration and by a pre-execution plugin, so agent-level
 permission overrides cannot bypass the boundary. The agent must perform

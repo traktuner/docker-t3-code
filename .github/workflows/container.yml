@@ -68,7 +68,8 @@ jobs:
             scripts/t3-xcode-auth.sh scripts/t3-xcode-ssh-gate \
             scripts/t3-xcode-worker \
             scripts/update-xcode-worker.sh scripts/t3-doctor.sh \
-            scripts/github-git-askpass.sh scripts/issue-worker-entrypoint.sh
+            scripts/github-git-askpass.sh scripts/issue-worker-entrypoint.sh \
+            sandbox/gateway-entrypoint.sh
           node --check \
             scripts/auth-proxy.mjs scripts/configure-cursor-mcp.mjs \
             scripts/mcp-auth-helper.mjs scripts/provision-opencode-mcp.mjs \

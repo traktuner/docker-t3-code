@@ -9,6 +9,12 @@ if (!configPath) {
 }
 const reconcileManaged = (process.env.T3_SANDBOX_MCP_RECONCILE || "1") === "1";
 const managedMcpNames = ["t3-sandbox", "xcodebuild"];
+const sandboxInstructionsFile = (
+  process.env.T3_OPENCODE_SANDBOX_INSTRUCTIONS_FILE || ""
+).trim();
+const sandboxOnly = /^(?:1|true|yes|on)$/i.test(
+  process.env.T3_OPENCODE_SANDBOX_ONLY || "",
+);
 
 const cloudflareMcpBase = {
   cloudflare: {
@@ -517,6 +523,94 @@ function renderEntryValue(value) {
   return JSON.stringify(value);
 }
 
+function insertRootProperty(input, name, renderedValue) {
+  const rootStart = input.indexOf("{");
+  if (rootStart < 0) throw new Error(`${configPath} does not contain a JSON object`);
+  const rootEnd = findMatchingBrace(input, rootStart);
+  if (rootEnd < 0) throw new Error(`${configPath} has an unterminated root object`);
+  const rootIndent = lineIndent(input, rootEnd);
+  const propertyIndent = `${rootIndent}  `;
+  const beforeClose = input.slice(rootStart + 1, rootEnd).trimEnd();
+  const needsComma = beforeClose.length > 0 && !beforeClose.endsWith(",");
+  const insert = `${needsComma ? "," : ""}\n${propertyIndent}${JSON.stringify(name)}: ${renderedValue}\n`;
+  return `${input.slice(0, rootEnd)}${insert}${input.slice(rootEnd)}`;
+}
+
+function ensureArrayString(input, propertyName, value) {
+  if (!value) return input;
+  const rootStart = input.indexOf("{");
+  const rootEnd = rootStart >= 0 ? findMatchingBrace(input, rootStart) : -1;
+  if (rootEnd < 0) throw new Error(`${configPath} has an invalid root object`);
+  const property = findObjectProperty(input, rootStart, rootEnd, propertyName);
+  if (!property) {
+    return insertRootProperty(input, propertyName, `[${JSON.stringify(value)}]`);
+  }
+  if (input[property.valueStart] !== "[") {
+    throw new Error(`${configPath} has a ${propertyName} property, but it is not an array`);
+  }
+
+  let cursor = property.valueStart + 1;
+  while (cursor < property.valueEnd) {
+    cursor = skipSpaceAndComments(input, cursor);
+    if (input[cursor] === ",") {
+      cursor += 1;
+      continue;
+    }
+    const item = readString(input, cursor);
+    if (!item) {
+      cursor += 1;
+      continue;
+    }
+    if (item.value === value) return input;
+    cursor = item.end;
+  }
+
+  const beforeClose = input.slice(property.valueStart + 1, property.valueEnd).trimEnd();
+  const needsComma = beforeClose.length > 0 && !beforeClose.endsWith(",");
+  const insert = `${needsComma ? "," : ""}\n    ${JSON.stringify(value)}\n  `;
+  return `${input.slice(0, property.valueEnd)}${insert}${input.slice(property.valueEnd)}`;
+}
+
+function upsertObjectEntries(input, propertyName, desiredEntries) {
+  if (desiredEntries.size === 0) return input;
+  let rootStart = input.indexOf("{");
+  let rootEnd = rootStart >= 0 ? findMatchingBrace(input, rootStart) : -1;
+  if (rootEnd < 0) throw new Error(`${configPath} has an invalid root object`);
+  let property = findObjectProperty(input, rootStart, rootEnd, propertyName);
+  if (!property) {
+    const rendered = `{\n${entryLines([...desiredEntries], "    ")}\n  }`;
+    return insertRootProperty(input, propertyName, rendered);
+  }
+  if (input[property.valueStart] !== "{") {
+    throw new Error(`${configPath} has a ${propertyName} property, but it is not an object`);
+  }
+
+  const replacements = [...desiredEntries].flatMap(([name, value]) => {
+    const entry = findObjectProperty(input, property.valueStart, property.valueEnd, name);
+    return entry ? [{ ...entry, value: renderEntryValue(value) }] : [];
+  });
+  let output = replacements
+    .sort((left, right) => right.valueStart - left.valueStart)
+    .reduce(
+      (text, replacement) =>
+        `${text.slice(0, replacement.valueStart)}${replacement.value}${text.slice(replacement.valueEnd + 1)}`,
+      input,
+    );
+
+  rootStart = output.indexOf("{");
+  rootEnd = findMatchingBrace(output, rootStart);
+  property = findObjectProperty(output, rootStart, rootEnd, propertyName);
+  const missing = [...desiredEntries].filter(
+    ([name]) => !findObjectProperty(output, property.valueStart, property.valueEnd, name),
+  );
+  if (missing.length === 0) return output;
+  const indent = `${lineIndent(output, property.valueEnd)}  `;
+  const beforeClose = output.slice(property.valueStart + 1, property.valueEnd).trimEnd();
+  const needsComma = beforeClose.length > 0 && !beforeClose.endsWith(",");
+  const insert = `${needsComma ? "," : ""}\n${entryLines(missing, indent)}\n${lineIndent(output, property.valueEnd)}`;
+  return `${output.slice(0, property.valueEnd)}${insert}${output.slice(property.valueEnd)}`;
+}
+
 function entryLines(entries, indent) {
   return entries
     .map(([name, config]) => `${indent}${JSON.stringify(name)}: ${renderEntryValue(config)}`)
@@ -599,7 +693,28 @@ function reconcileManagedEntries(input, desired) {
 fs.mkdirSync(path.dirname(configPath), { recursive: true });
 const before = fs.existsSync(configPath) ? fs.readFileSync(configPath, "utf8") : "";
 const desired = desiredMcpServers();
-const after = ensureConfig(reconcileManagedEntries(before, desired), desired);
+let after = ensureConfig(reconcileManagedEntries(before, desired), desired);
+after = ensureArrayString(after, "instructions", sandboxInstructionsFile);
+if (sandboxOnly) {
+  after = upsertObjectEntries(
+    after,
+    "permission",
+    new Map([
+      ["bash", "deny"],
+      ["edit", "deny"],
+      ["write", "deny"],
+      ["patch", "deny"],
+      ["read", "deny"],
+      ["glob", "deny"],
+      ["grep", "deny"],
+      ["list", "deny"],
+      ["external_directory", "deny"],
+      ["task", "deny"],
+      ["t3-sandbox_*", "allow"],
+      ["xcodebuild_*", "allow"],
+    ]),
+  );
+}
 if (after !== before) {
   const temporary = path.join(path.dirname(configPath), `.${path.basename(configPath)}.${process.pid}.tmp`);
   try {

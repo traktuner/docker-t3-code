@@ -8,9 +8,9 @@ export XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
 export XDG_DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}"
 export XDG_CACHE_HOME="${XDG_CACHE_HOME:-$HOME/.cache}"
 export OPENCODE_CONFIG_DIR="${OPENCODE_CONFIG_DIR:-$XDG_CONFIG_HOME/opencode}"
-export NPM_CONFIG_PREFIX="${NPM_CONFIG_PREFIX:-$data_root/npm-global}"
+export NPM_CONFIG_PREFIX="${T3_ISSUE_WORKER_NPM_PREFIX:-$data_root/npm-global}"
 export npm_config_prefix="$NPM_CONFIG_PREFIX"
-export NPM_CONFIG_CACHE="${NPM_CONFIG_CACHE:-$data_root/npm-cache}"
+export NPM_CONFIG_CACHE="${T3_ISSUE_WORKER_NPM_CACHE:-$data_root/npm-cache}"
 export npm_config_cache="$NPM_CONFIG_CACHE"
 export T3_SANDBOX_LOCK_WORKSPACE="${T3_SANDBOX_LOCK_WORKSPACE:-1}"
 export PATH="$NPM_CONFIG_PREFIX/bin:$HOME/.local/bin:$PATH"
@@ -105,6 +105,11 @@ export T3_OPENCODE_CONFIG="$config_path"
 export T3_OPENCODE_CLOUDFLARE_MCP=off
 export T3_OPENCODE_MCP_PRESETS=""
 export T3_SANDBOX_MCP_RECONCILE=1
+install -m 0600 \
+  /opt/t3-docker/t3-sandbox-instructions.md \
+  "$OPENCODE_CONFIG_DIR/t3-sandbox-instructions.md"
+export T3_OPENCODE_SANDBOX_INSTRUCTIONS_FILE="$OPENCODE_CONFIG_DIR/t3-sandbox-instructions.md"
+export T3_OPENCODE_SANDBOX_ONLY="${T3_OPENCODE_SANDBOX_ONLY:-1}"
 node /opt/t3-docker/provision-opencode-mcp.mjs "$config_path"
 
 if [[ -n "${T3_SANDBOX_URL:-}" ]]; then

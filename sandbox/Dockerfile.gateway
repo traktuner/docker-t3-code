@@ -49,12 +49,13 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev --no-install-project
 
 COPY src ./src
-COPY opensandbox.toml render-opensandbox-config.py ./
+COPY opensandbox.toml render-opensandbox-config.py gateway-entrypoint.sh ./
 
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev
 
 RUN chmod +x /opt/t3-sandbox/render-opensandbox-config.py \
+      /opt/t3-sandbox/gateway-entrypoint.sh \
     && mkdir -p /data/devcontainers
 
 EXPOSE 8090
@@ -64,4 +65,5 @@ HEALTHCHECK --interval=20s --timeout=3s --start-period=20s --retries=3 \
 
 # Docker socket access is an administrative capability. The gateway is the only
 # custom service that receives it; coding sandboxes and T3 remain non-root.
+ENTRYPOINT ["/opt/t3-sandbox/gateway-entrypoint.sh"]
 CMD ["uvicorn", "t3_sandbox_gateway.api:app", "--host", "0.0.0.0", "--port", "8090", "--no-access-log"]

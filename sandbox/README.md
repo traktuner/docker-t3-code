@@ -109,8 +109,11 @@ network once with `docker network create t3-agent-platform`.
 
 The production infra stack generates both values once into a private named
 volume, so no external secret-manager entries are required for this subsystem.
-The OpenSandbox TOML is rendered and syntax-checked on every stack start; the
-host-path allowlist therefore always follows the configured workspace root.
+The long-running gateway performs secret, cache, and configuration setup
+idempotently before serving requests. OpenSandbox waits for those files during
+startup. No completed init containers remain in the Compose project. The
+OpenSandbox TOML is rendered and syntax-checked on every gateway start, so the
+host-path allowlist always follows the configured workspace root.
 
 Configure T3 with:
 
@@ -119,6 +122,8 @@ T3_SANDBOX_URL=http://t3-sandbox-gateway:8090
 T3_SANDBOX_TOKEN_FILE=/run/t3-sandbox/gateway-token
 T3_SANDBOX_WORKSPACE=/workspace
 T3_SANDBOX_MCP_RECONCILE=1
+T3_OPENCODE_SANDBOX_INSTRUCTIONS=1
+T3_OPENCODE_SANDBOX_ONLY=1
 ```
 
 The entrypoint idempotently registers the same MCP bridge for OpenCode, Codex,
@@ -134,6 +139,11 @@ Claude, Cursor, and Grok when each harness is enabled. The tools are:
 An agent should create or reuse a sandbox before a build or tool-heavy task,
 run commands there, and destroy it when finished. Expired leases are also
 removed by OpenSandbox.
+
+When `T3_OPENCODE_SANDBOX_INSTRUCTIONS=1`, the main container adds a managed
+global OpenCode instruction file describing this lifecycle. With
+`T3_OPENCODE_SANDBOX_ONLY=1`, local read/edit/search/shell/subagent tools are
+denied and the agent must perform repository work through `t3-sandbox`.
 
 ## Configuration
 

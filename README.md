@@ -152,6 +152,14 @@ Set `T3_SANDBOX_URL`, `T3_SANDBOX_TOKEN_FILE`, and
 `T3_SANDBOX_MCP_RECONCILE=1`. The entrypoint then idempotently registers the
 same `t3-sandbox` MCP tools for enabled OpenCode, Codex, Claude, Cursor, and Grok
 harnesses.
+
+For OpenCode, the container also installs a managed global instruction file so
+the model discovers and uses the sandbox without a per-chat prompt. Set
+`T3_OPENCODE_SANDBOX_INSTRUCTIONS=0` to disable that behavior. Set
+`T3_OPENCODE_SANDBOX_ONLY=1` to deny OpenCode's local filesystem, shell, edit,
+and subagent tools while keeping sandbox, Xcode, and independently configured
+remote MCP tools available. This is enabled by default in the production infra
+example, but remains opt-in in the generic Compose files.
 See [`sandbox/README.md`](sandbox/README.md) for the lifecycle, security model,
 Dev Container subset, and complete configuration.
 

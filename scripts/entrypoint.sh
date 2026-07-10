@@ -197,6 +197,14 @@ provision_opencode_mcp() {
     printf '{\n  "$schema": "https://opencode.ai/config.json"\n}\n' > "$config_path"
   fi
 
+  if [[ -n "${T3_SANDBOX_URL:-}" && "${T3_OPENCODE_SANDBOX_INSTRUCTIONS:-1}" == "1" ]]; then
+    local instructions_file="$target_dir/t3-sandbox-instructions.md"
+    install -m 0600 /opt/t3-docker/t3-sandbox-instructions.md "$instructions_file"
+    export T3_OPENCODE_SANDBOX_INSTRUCTIONS_FILE="$instructions_file"
+  else
+    unset T3_OPENCODE_SANDBOX_INSTRUCTIONS_FILE
+  fi
+
   node /opt/t3-docker/provision-opencode-mcp.mjs "$config_path"
 
   if [[ "${T3_OPENCODE_MCP_PRESERVE_FILE_GENERATED:-0}" == "1" ]]; then

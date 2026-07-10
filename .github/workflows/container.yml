@@ -59,6 +59,7 @@ jobs:
           uv run --project sandbox --extra test --frozen ruff check \
             --config sandbox/pyproject.toml \
             sandbox/src sandbox/tests sandbox/render-opensandbox-config.py \
+            sandbox/opensandbox-healthcheck.py \
             scripts/configure-codex-mcp.py
           uv run --project sandbox --extra test --frozen pytest -q sandbox/tests
           bash -n \

@@ -2,6 +2,8 @@ services:
   opensandbox:
     image: opensandbox/server:v0.2.1
     restart: unless-stopped
+    environment:
+      T3_SANDBOX_HEALTH_GRACE_SECONDS: ${T3_SANDBOX_HEALTH_GRACE_SECONDS:-600}
     entrypoint: ["/bin/sh", "-ec"]
     command:
       - |
@@ -20,7 +22,7 @@ services:
       control:
       runtime:
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=2)"]
+      test: ["CMD", "python", "/etc/opensandbox/healthcheck.py"]
       interval: 20s
       timeout: 3s
       retries: 5

@@ -163,6 +163,7 @@ Important gateway variables:
 | `T3_SANDBOX_MAX_OUTPUT_BYTES` | `262144` | Maximum returned bytes per output stream |
 | `T3_SANDBOX_CPU_LIMIT` | `4` | CPU limit per worker |
 | `T3_SANDBOX_MEMORY_LIMIT` | `8Gi` | Memory limit per worker |
+| `T3_SANDBOX_HEALTH_GRACE_SECONDS` | `600` | Preserve healthy state during bounded image-pull/API busy periods |
 | `T3_SANDBOX_EGRESS_ALLOW` | empty | Optional comma-separated egress allowlist |
 | `T3_SANDBOX_DEVCONTAINER_ENABLED` | `1` | Permit trusted Dev Container builds |
 | `T3_SANDBOX_DEVCONTAINER_FEATURE_PREFIXES` | official registries | Feature allowlist |

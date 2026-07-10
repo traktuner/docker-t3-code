@@ -49,12 +49,13 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev --no-install-project
 
 COPY src ./src
-COPY opensandbox.toml render-opensandbox-config.py gateway-entrypoint.sh ./
+COPY opensandbox.toml render-opensandbox-config.py opensandbox-healthcheck.py gateway-entrypoint.sh ./
 
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev
 
 RUN chmod +x /opt/t3-sandbox/render-opensandbox-config.py \
+      /opt/t3-sandbox/opensandbox-healthcheck.py \
       /opt/t3-sandbox/gateway-entrypoint.sh \
     && mkdir -p /data/devcontainers
 

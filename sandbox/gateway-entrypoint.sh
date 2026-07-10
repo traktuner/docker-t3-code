@@ -46,5 +46,8 @@ write_secret \
 /opt/t3-sandbox/render-opensandbox-config.py \
   /opt/t3-sandbox/opensandbox.toml \
   "$config_output"
+install -m 0555 \
+  /opt/t3-sandbox/opensandbox-healthcheck.py \
+  "$(dirname "$config_output")/healthcheck.py"
 
 exec "$@"

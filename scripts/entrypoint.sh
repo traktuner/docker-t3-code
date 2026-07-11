@@ -49,6 +49,29 @@ persist_runtime_env_value() {
   printf '%s=%q\n' "$name" "$value" >> "$RUNTIME_ENV"
 }
 
+configure_git_safe_directories() {
+  local workspace="${T3_WORKDIR:-/workspace}"
+  local max_depth="${T3_GIT_REPOSITORY_SCAN_DEPTH:-8}"
+  local git_marker repository
+
+  [[ -d "$workspace" ]] || return 0
+  if [[ ! "$max_depth" =~ ^[1-9][0-9]*$ ]]; then
+    echo "T3_GIT_REPOSITORY_SCAN_DEPTH must be a positive integer." >&2
+    exit 1
+  fi
+
+  while IFS= read -r -d '' git_marker; do
+    repository="$(dirname "$git_marker")"
+    if ! git config --global --get-all safe.directory 2>/dev/null | grep -Fqx -- "$repository"; then
+      git config --global --add safe.directory "$repository"
+      echo "Trusted Git repository in mounted workspace: $repository"
+    fi
+  done < <(
+    find "$workspace" -xdev -mindepth 1 -maxdepth "$max_depth" \
+      \( -type d -o -type f \) -name .git -print0 2>/dev/null
+  )
+}
+
 preserve_opencode_mcp_config() {
   local target_dir="$1"
   local candidate="${T3_OPENCODE_CONFIG:-}"
@@ -534,6 +557,8 @@ fi
 if ! /opt/t3-docker/provision-harness-mcp.sh; then
   echo "Warning: failed to provision one or more harness MCP registrations." >&2
 fi
+
+configure_git_safe_directories
 
 start_managed_opencode_server
 start_auth_web_helper

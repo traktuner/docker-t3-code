@@ -121,6 +121,8 @@ T3_WORKSPACE_HOST=/path/to/developer
 ```
 
 That exposes the whole developer tree at `/workspace` while provider state stays under `/data`.
+At startup, repositories found below that workspace are registered individually as Git safe
+directories. `T3_GIT_REPOSITORY_SCAN_DEPTH` controls the scan depth and defaults to `8`.
 
 For a network-backed workspace that is writable through a share group, keep the
 share ACLs on the storage server and set the supplemental group only:

@@ -8,26 +8,10 @@ t3_home = "/data/t3"
 no_browser = true
 auto_bootstrap_project_from_cwd = true
 
-[auth]
-# When enabled, the container exposes a small local proxy on [server].port and
-# runs T3 itself on internal_host:internal_port. The proxy creates a native,
-# short-lived T3 pairing credential locally and immediately exchanges it for a
-# browser-session cookie, so trusted reverse-proxy deployments open directly.
-proxy = false
-internal_host = "127.0.0.1"
-internal_port = 13773
-admin_ttl = "2m"
-web_helper = false
-web_helper_host = "0.0.0.0"
-web_helper_port = 13774
-web_helper_token = ""
-web_helper_commands_json = ""
-
 [updates]
-# Keep T3 itself current on each container start. Provider CLIs are baked into
-# the image and are not updated at runtime unless explicitly enabled here.
+# T3 itself is pinned in the image. Provider CLIs are baked into the image and
+# are not updated at runtime unless explicitly enabled here.
 on_start = true
-t3 = true
 codex = false
 claude = false
 cursor = false

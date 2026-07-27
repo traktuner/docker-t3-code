@@ -12,7 +12,7 @@ on:
   workflow_dispatch:
     inputs:
       t3_version:
-        description: "T3 npm version to bake into the image. Empty uses npm latest."
+        description: "T3 npm version to bake into the image. Empty uses the repository-pinned version."
         required: false
         type: string
       build_number:
@@ -36,6 +36,7 @@ concurrency:
 
 env:
   REGISTRY: ghcr.io
+  T3_VERSION: 0.0.28
 
 jobs:
   build:
@@ -73,9 +74,9 @@ jobs:
             scripts/github-git-askpass.sh scripts/issue-worker-entrypoint.sh \
             sandbox/gateway-entrypoint.sh
           node --check \
-            scripts/auth-proxy.mjs scripts/configure-cursor-mcp.mjs \
+            scripts/configure-cursor-mcp.mjs \
             scripts/cursor-sandbox-wrapper.mjs \
-            scripts/mcp-auth-helper.mjs scripts/provision-opencode-mcp.mjs \
+            scripts/provision-opencode-mcp.mjs \
             scripts/t3-sandbox-mcp.mjs scripts/t3-xcode-mcp.mjs \
             scripts/github-issue-worker-lib.mjs scripts/github-issue-worker.mjs \
             scripts/t3-sandbox-only-plugin.js
@@ -140,7 +141,7 @@ jobs:
 
           t3_version="${REQUESTED_T3_VERSION}"
           if [[ -z "$t3_version" ]]; then
-            t3_version="$(npm view t3 version)"
+            t3_version="${T3_VERSION}"
           fi
 
           node - "$t3_version" "$REQUESTED_BUILD_NUMBER" <<'NODE'

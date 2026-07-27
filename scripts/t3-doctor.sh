@@ -122,15 +122,6 @@ if command -v opencode >/dev/null 2>&1; then
 fi
 printf '\n'
 
-if [[ "${T3_AUTH_WEB_HELPER:-0}" == "1" ]]; then
-  helper_url="http://127.0.0.1:${T3_AUTH_WEB_HELPER_PORT:-13774}/auth-tools"
-  if curl --connect-timeout 1 --max-time 3 -fsS "$helper_url" >/dev/null 2>&1; then
-    ok "auth helper answers: $helper_url"
-  else
-    fail "auth helper not answering: $helper_url"
-  fi
-fi
-
 if [[ -n "${T3_SANDBOX_URL:-}" ]]; then
   sandbox_health="${T3_SANDBOX_URL%/}/health"
   if curl --connect-timeout 1 --max-time 3 -fsS "$sandbox_health" >/dev/null 2>&1; then

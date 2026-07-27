@@ -2,11 +2,16 @@
 set -Eeuo pipefail
 
 RUNTIME_ENV=/tmp/t3-docker/runtime.env
-auth_helper_pid=""
 managed_opencode_pid=""
 t3_pid=""
-proxy_pid=""
-mkdir -p "$(dirname "$RUNTIME_ENV")" /data/home /data/npm-global /data/npm-cache /data/codex
+mkdir -p \
+  "$(dirname "$RUNTIME_ENV")" \
+  /data/t3 \
+  /data/home \
+  /data/npm-global \
+  /data/npm-cache \
+  /data/codex \
+  /data/claude-home
 
 if [[ -z "${T3_SANDBOX_TOKEN:-}" && -n "${T3_SANDBOX_TOKEN_FILE:-}" ]]; then
   if [[ ! -r "$T3_SANDBOX_TOKEN_FILE" ]]; then
@@ -425,44 +430,13 @@ start_managed_opencode_server() {
   echo "Managed OpenCode server did not answer readiness probe; T3 will still try http://${host}:${port}." >&2
 }
 
-start_auth_web_helper() {
-  if [[ "${T3_AUTH_WEB_HELPER:-0}" != "1" ]]; then
-    return 0
-  fi
-
-  echo "Starting T3 auth helper on http://${T3_AUTH_WEB_HELPER_HOST:-0.0.0.0}:${T3_AUTH_WEB_HELPER_PORT:-13774}"
-  node /opt/t3-docker/mcp-auth-helper.mjs &
-  auth_helper_pid="$!"
-  if ! wait_for_http_ready "http://127.0.0.1:${T3_AUTH_WEB_HELPER_PORT:-13774}/auth-tools" "T3 auth helper" 20; then
-    kill "$auth_helper_pid" >/dev/null 2>&1 || true
-    wait "$auth_helper_pid" >/dev/null 2>&1 || true
-    exit 1
-  fi
-}
-
-wait_for_http_ready() {
-  local url="$1"
-  local label="$2"
-  local attempts="${3:-120}"
-
-  for _ in $(seq 1 "$attempts"); do
-    if curl --connect-timeout 1 --max-time 2 -fsS "$url" >/dev/null 2>&1; then
-      return 0
-    fi
-    sleep 0.5
-  done
-
-  echo "$label did not become ready at $url." >&2
-  return 1
-}
-
 cleanup_children() {
   local name pid
-  for name in auth_helper_pid managed_opencode_pid proxy_pid t3_pid; do
+  for name in managed_opencode_pid t3_pid; do
     pid="${!name:-}"
     [[ -z "$pid" ]] || kill "$pid" >/dev/null 2>&1 || true
   done
-  for name in auth_helper_pid managed_opencode_pid proxy_pid t3_pid; do
+  for name in managed_opencode_pid t3_pid; do
     pid="${!name:-}"
     [[ -z "$pid" ]] || wait "$pid" >/dev/null 2>&1 || true
   done
@@ -475,83 +449,46 @@ wait_for_supervised_processes() {
   exit "$exit_code"
 }
 
-run_t3_foreground() {
+run_t3_headless() {
+  local t3_binary=/usr/local/bin/t3
   local -a args=(
     serve
+    --mode web
     --host "$T3_SERVER_HOST"
     --port "$T3_SERVER_PORT"
     --base-dir "$T3CODE_HOME"
   )
 
+  if [[ "${T3_AUTO_BOOTSTRAP_PROJECT_FROM_CWD:-1}" == "1" ]]; then
+    args+=(--auto-bootstrap-project-from-cwd)
+  fi
   args+=("$T3_WORKDIR")
 
-  echo "Starting T3 Code on http://${T3_SERVER_HOST}:${T3_SERVER_PORT} with workdir ${T3_WORKDIR}"
-  if [[ -z "${auth_helper_pid:-}" && -z "${managed_opencode_pid:-}" ]]; then
-    exec t3 "${args[@]}"
-  fi
-
-  t3 "${args[@]}" &
-  t3_pid="$!"
-  trap cleanup_children TERM INT
-  local -a supervised_pids=("$t3_pid")
-  [[ -z "${auth_helper_pid:-}" ]] || supervised_pids+=("$auth_helper_pid")
-  [[ -z "${managed_opencode_pid:-}" ]] || supervised_pids+=("$managed_opencode_pid")
-  wait_for_supervised_processes "${supervised_pids[@]}"
-}
-
-run_t3_with_auth_proxy() {
-  local listen_host="$T3_SERVER_HOST"
-  local listen_port="$T3_SERVER_PORT"
-  local upstream_host="${T3_AUTH_PROXY_INTERNAL_HOST:-127.0.0.1}"
-  local upstream_port="${T3_AUTH_PROXY_INTERNAL_PORT:-13773}"
-  local -a args=(
-    serve
-    --host "$upstream_host"
-    --port "$upstream_port"
-    --base-dir "$T3CODE_HOME"
-    "$T3_WORKDIR"
-  )
-
-  echo "Starting T3 Code internal backend on http://${upstream_host}:${upstream_port} with workdir ${T3_WORKDIR}"
-  t3 "${args[@]}" &
-  t3_pid="$!"
-  trap cleanup_children TERM INT
-
-  if ! wait_for_http_ready "http://${upstream_host}:${upstream_port}/api/auth/session" "T3 Code internal backend"; then
-    cleanup_children
+  if [[ ! -x "$t3_binary" ]]; then
+    echo "Pinned T3 binary is missing or not executable: $t3_binary" >&2
     exit 1
   fi
 
-  echo "Starting T3 auth proxy on http://${listen_host}:${listen_port}"
-  T3_AUTH_PROXY_LISTEN_HOST="$listen_host" \
-    T3_AUTH_PROXY_LISTEN_PORT="$listen_port" \
-    T3_AUTH_PROXY_UPSTREAM_HOST="$upstream_host" \
-    T3_AUTH_PROXY_UPSTREAM_PORT="$upstream_port" \
-    T3_AUTH_PROXY_ADMIN_TTL="${T3_AUTH_PROXY_ADMIN_TTL:-2m}" \
-    node /opt/t3-docker/auth-proxy.mjs &
-  proxy_pid="$!"
+  echo "Starting official T3 headless server on http://${T3_SERVER_HOST}:${T3_SERVER_PORT} with base dir ${T3CODE_HOME} and workspace ${T3_WORKDIR}"
+  if [[ -z "${managed_opencode_pid:-}" ]]; then
+    exec "$t3_binary" "${args[@]}"
+  fi
 
-  local -a supervised_pids=("$t3_pid" "$proxy_pid")
-  [[ -z "${auth_helper_pid:-}" ]] || supervised_pids+=("$auth_helper_pid")
+  "$t3_binary" "${args[@]}" &
+  t3_pid="$!"
+  trap cleanup_children TERM INT
+  local -a supervised_pids=("$t3_pid")
   [[ -z "${managed_opencode_pid:-}" ]] || supervised_pids+=("$managed_opencode_pid")
   wait_for_supervised_processes "${supervised_pids[@]}"
 }
 
+provision_provider_config_dirs
 if [[ "${T3_AUTO_UPDATE_EFFECTIVE:-1}" == "1" ]]; then
-  provision_provider_config_dirs
-  install_npm_latest "${T3_UPDATE_T3:-1}" "t3" "T3 Code" "t3"
   install_npm_latest "${T3_UPDATE_CODEX:-0}" "@openai/codex" "Codex CLI" "codex"
   install_npm_latest "${T3_UPDATE_CLAUDE:-0}" "@anthropic-ai/claude-code" "Claude Code" "claude"
   install_npm_latest "${T3_UPDATE_OPENCODE:-0}" "opencode-ai" "OpenCode" "opencode"
   install_cursor_latest "${T3_UPDATE_CURSOR:-0}"
   install_grok_latest "${T3_UPDATE_GROK:-0}"
-else
-  provision_provider_config_dirs
-  if ! command -v t3 >/dev/null 2>&1; then
-    echo "T3_AUTO_UPDATE=0 but t3 is not installed in $NPM_CONFIG_PREFIX/bin." >&2
-    echo "Start once with T3_AUTO_UPDATE=1 or pre-populate the /data volume." >&2
-    exit 1
-  fi
 fi
 
 if ! /opt/t3-docker/provision-harness-mcp.sh; then
@@ -561,27 +498,8 @@ fi
 configure_git_safe_directories
 
 start_managed_opencode_server
-start_auth_web_helper
 
 mkdir -p "$T3_WORKDIR"
 cd "$T3_WORKDIR"
 
-if [[ "${T3_AUTO_BOOTSTRAP_PROJECT_FROM_CWD:-1}" == "1" ]]; then
-  echo "Ensuring T3 project exists for ${T3_WORKDIR}"
-  if ! project_output="$(t3 project add --base-dir "$T3CODE_HOME" "$T3_WORKDIR" 2>&1)"; then
-    if [[ "$project_output" == *"already exists"* ]]; then
-      echo "T3 project already exists for ${T3_WORKDIR}"
-    else
-      echo "$project_output" >&2
-      exit 1
-    fi
-  elif [[ -n "$project_output" ]]; then
-    echo "$project_output"
-  fi
-fi
-
-if [[ "${T3_AUTH_PROXY:-0}" == "1" ]]; then
-  run_t3_with_auth_proxy
-else
-  run_t3_foreground
-fi
+run_t3_headless

@@ -147,7 +147,7 @@ RUN bun_installer="$(mktemp)" \
       [ ! -e "$bin" ] || chmod +x "$bin"; \
     done
 
-ARG T3_VERSION=latest
+ARG T3_VERSION=0.0.28
 
 RUN --mount=type=cache,target=/tmp/npm-cache \
     T3_DOCKER_KEEP_NPM_CACHE=1 T3_DOCKER_NPM_CACHE_DIR=/tmp/npm-cache T3_DOCKER_INSTALL_TARGET=t3 T3_VERSION="${T3_VERSION}" /opt/t3-docker/install-provider-clis.sh \
@@ -156,8 +156,6 @@ RUN --mount=type=cache,target=/tmp/npm-cache \
 COPY --chown=t3:t3 scripts/render-config.py /opt/t3-docker/render-config.py
 COPY --chown=t3:t3 scripts/entrypoint.sh /opt/t3-docker/entrypoint.sh
 COPY --chown=t3:t3 scripts/healthcheck.sh /opt/t3-docker/healthcheck.sh
-COPY --chown=t3:t3 scripts/auth-proxy.mjs /opt/t3-docker/auth-proxy.mjs
-COPY --chown=t3:t3 scripts/mcp-auth-helper.mjs /opt/t3-docker/mcp-auth-helper.mjs
 COPY --chown=t3:t3 scripts/harness-auth.sh /opt/t3-docker/harness-auth.sh
 COPY --chown=t3:t3 scripts/provision-opencode-mcp.mjs /opt/t3-docker/provision-opencode-mcp.mjs
 COPY --chown=t3:t3 scripts/provision-harness-mcp.sh /opt/t3-docker/provision-harness-mcp.sh
@@ -177,7 +175,7 @@ COPY --chown=t3:t3 scripts/issue-worker-entrypoint.sh /opt/t3-docker/issue-worke
 COPY --chown=t3:t3 scripts/t3-sandbox-instructions.md /opt/t3-docker/t3-sandbox-instructions.md
 COPY --chown=t3:t3 scripts/t3-sandbox-only-plugin.js /opt/t3-docker/t3-sandbox-only-plugin.js
 
-RUN chmod +x /opt/t3-docker/render-config.py /opt/t3-docker/entrypoint.sh /opt/t3-docker/healthcheck.sh /opt/t3-docker/auth-proxy.mjs /opt/t3-docker/mcp-auth-helper.mjs /opt/t3-docker/harness-auth.sh /opt/t3-docker/provision-opencode-mcp.mjs /opt/t3-docker/provision-harness-mcp.sh /opt/t3-docker/provision-harness-instructions.py /opt/t3-docker/configure-codex-mcp.py /opt/t3-docker/configure-cursor-mcp.mjs /opt/t3-docker/cursor-sandbox-wrapper.mjs /opt/t3-docker/t3-sandbox-mcp.mjs /opt/t3-docker/t3-xcode-mcp.mjs /opt/t3-docker/t3-xcode-auth.sh /opt/t3-docker/t3-doctor.sh /opt/t3-docker/github-issue-worker.mjs /opt/t3-docker/github-git-askpass.sh /opt/t3-docker/issue-worker-entrypoint.sh \
+RUN chmod +x /opt/t3-docker/render-config.py /opt/t3-docker/entrypoint.sh /opt/t3-docker/healthcheck.sh /opt/t3-docker/harness-auth.sh /opt/t3-docker/provision-opencode-mcp.mjs /opt/t3-docker/provision-harness-mcp.sh /opt/t3-docker/provision-harness-instructions.py /opt/t3-docker/configure-codex-mcp.py /opt/t3-docker/configure-cursor-mcp.mjs /opt/t3-docker/cursor-sandbox-wrapper.mjs /opt/t3-docker/t3-sandbox-mcp.mjs /opt/t3-docker/t3-xcode-mcp.mjs /opt/t3-docker/t3-xcode-auth.sh /opt/t3-docker/t3-doctor.sh /opt/t3-docker/github-issue-worker.mjs /opt/t3-docker/github-git-askpass.sh /opt/t3-docker/issue-worker-entrypoint.sh \
     && ln -s /opt/t3-docker/harness-auth.sh /usr/local/bin/t3-auth \
     && ln -s /opt/t3-docker/t3-sandbox-mcp.mjs /usr/local/bin/t3-sandbox-mcp \
     && ln -s /opt/t3-docker/t3-xcode-mcp.mjs /usr/local/bin/t3-xcode-mcp \
@@ -196,7 +194,7 @@ LABEL org.opencontainers.image.version="${T3_VERSION}-${T3_BUILD_NUMBER}"
 USER t3
 WORKDIR /workspace
 
-EXPOSE 3773 13774
+EXPOSE 3773
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=90s --retries=3 \
   CMD ["/opt/t3-docker/healthcheck.sh"]

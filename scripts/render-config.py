@@ -373,7 +373,6 @@ def main():
     config = read_toml(config_path)
 
     server = config.get("server", {})
-    auth = config.get("auth", {})
     updates = config.get("updates", {})
     providers = config.get("providers", {})
 
@@ -393,30 +392,6 @@ def main():
         "auto_bootstrap_project_from_cwd",
         True,
     )
-    auth_proxy = env_or_cfg_bool("T3_AUTH_PROXY", auth, "proxy", False)
-    auth_proxy_internal_host = str(
-        env_or_cfg("T3_AUTH_PROXY_INTERNAL_HOST", auth, "internal_host", "127.0.0.1")
-    )
-    auth_proxy_internal_port = int(
-        env_or_cfg("T3_AUTH_PROXY_INTERNAL_PORT", auth, "internal_port", 13773)
-    )
-    auth_proxy_admin_ttl = str(
-        env_or_cfg("T3_AUTH_PROXY_ADMIN_TTL", auth, "admin_ttl", "2m")
-    )
-    auth_web_helper = env_or_cfg_bool("T3_AUTH_WEB_HELPER", auth, "web_helper", False)
-    auth_web_helper_host = str(
-        env_or_cfg("T3_AUTH_WEB_HELPER_HOST", auth, "web_helper_host", "0.0.0.0")
-    )
-    auth_web_helper_port = int(
-        env_or_cfg("T3_AUTH_WEB_HELPER_PORT", auth, "web_helper_port", 13774)
-    )
-    auth_web_helper_token = str(
-        env_or_cfg("T3_AUTH_WEB_HELPER_TOKEN", auth, "web_helper_token", "")
-    )
-    auth_web_helper_commands_json = str(
-        env_or_cfg("T3_AUTH_WEB_HELPER_COMMANDS_JSON", auth, "web_helper_commands_json", "")
-    )
-
     codex_enabled = provider_enabled(config, "codex", "T3_PROVIDER_CODEX", True)
     claude_enabled = provider_enabled(config, "claude", "T3_PROVIDER_CLAUDE", True)
     cursor_enabled = provider_enabled(config, "cursor", "T3_PROVIDER_CURSOR", True)
@@ -674,17 +649,7 @@ def main():
         "T3_SERVER_PORT": str(server_port),
         "T3_WORKDIR": workdir,
         "T3_AUTO_BOOTSTRAP_PROJECT_FROM_CWD": "1" if auto_bootstrap else "0",
-        "T3_AUTH_PROXY": "1" if auth_proxy else "0",
-        "T3_AUTH_PROXY_INTERNAL_HOST": auth_proxy_internal_host,
-        "T3_AUTH_PROXY_INTERNAL_PORT": str(auth_proxy_internal_port),
-        "T3_AUTH_PROXY_ADMIN_TTL": auth_proxy_admin_ttl,
-        "T3_AUTH_WEB_HELPER": "1" if auth_web_helper else "0",
-        "T3_AUTH_WEB_HELPER_HOST": auth_web_helper_host,
-        "T3_AUTH_WEB_HELPER_PORT": str(auth_web_helper_port),
-        "T3_AUTH_WEB_HELPER_TOKEN": auth_web_helper_token,
-        "T3_AUTH_WEB_HELPER_COMMANDS_JSON": auth_web_helper_commands_json,
         "T3_AUTO_UPDATE_EFFECTIVE": "1" if auto_update else "0",
-        "T3_UPDATE_T3": "1" if env_or_cfg_bool("T3_UPDATE_T3", updates, "t3", True) else "0",
         "T3_UPDATE_CODEX": "1" if provider_update_enabled(updates, "codex", install_disabled) else "0",
         "T3_UPDATE_CLAUDE": "1" if provider_update_enabled(updates, "claude", install_disabled) else "0",
         "T3_UPDATE_CURSOR": "1" if provider_update_enabled(updates, "cursor", install_disabled) else "0",

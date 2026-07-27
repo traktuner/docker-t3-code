@@ -1,18 +1,18 @@
 # Dockerized T3 Code
 
-This container runs the current `t3` web/headless server. All T3 Code upstream provider CLIs are baked into the image: Codex, Claude Code, Cursor Agent, Grok Build, OpenCode, and a bootstrap T3 CLI. The image also includes common agentic-coding tools such as `git`, `gh`, `ssh`, `rg`, `fd`, `jq`, `yq`, `uv`, `bun`, `pnpm`, `yarn`, `prettier`, `typescript`, `shellcheck`, `sqlite3`, `psql`, `mysql`, `redis-cli`, `lsof`, and `strace`. Only T3 itself updates at runtime by default.
+This container runs the official T3 Code headless server. All T3 Code upstream provider CLIs are baked into the image: Codex, Claude Code, Cursor Agent, Grok Build, and OpenCode. The image also includes common agentic-coding tools such as `git`, `gh`, `ssh`, `rg`, `fd`, `jq`, `yq`, `uv`, `bun`, `pnpm`, `yarn`, `prettier`, `typescript`, `shellcheck`, `sqlite3`, `psql`, `mysql`, `redis-cli`, `lsof`, and `strace`.
 
 ## What It Does
 
-- Starts `t3 serve` in the container on `0.0.0.0:3773`; Docker controls external exposure through `T3_BIND_ADDRESS`.
-- Can expose T3 through an optional auth proxy. The proxy uses T3's native local auth control plane to create a short-lived one-time pairing credential and immediately exchanges it for a browser-session cookie, so trusted reverse-proxy deployments can open directly without the pairing screen.
-- Installs or updates `t3` at container startup when enabled. Provider CLIs are installed in the image and are not updated at runtime unless explicitly enabled.
+- Starts the pinned `/usr/local/bin/t3` exclusively as `t3 serve --mode web --host 0.0.0.0 --port 3773 --base-dir /data/t3 /workspace`.
+- Serves the React web UI and WebSocket endpoint directly; no Electron process, custom remote server, pairing bypass, or `app.t3.codes` dependency is involved.
+- Exposes only container port `3773` to the Docker network. The existing external Traefik route is responsible for reaching it; Compose publishes no host port.
+- Keeps T3 pinned in the image. Provider CLIs are installed in the image and are not updated at runtime unless explicitly enabled.
 - Renders T3 provider settings from `config/t3code.toml` and environment variables.
 - Preserves unknown T3 settings and future provider instances while updating the fields managed by the container.
-- Adds `/workspace` as a T3 project at startup when `auto_bootstrap_project_from_cwd` is enabled.
+- Lets the official server add `/workspace` as a T3 project through `--auto-bootstrap-project-from-cwd` when enabled.
 - Stores API keys as T3 secret files under `data/t3/userdata/secrets`, not in `settings.json`.
 - Can run a managed container-local OpenCode server and point T3 at it through `serverUrl`; this is the preferred path for custom OpenCode configs such as Proton Lumo.
-- Can run an optional browser-based MCP auth helper at `/auth-tools` when `T3_AUTH_WEB_HELPER=1`.
 
 ## Quick Start
 
@@ -22,9 +22,9 @@ cp .env.example .env
 docker compose up --build
 ```
 
-Open [http://localhost:3773](http://localhost:3773).
-
-By default the host port is bound to `127.0.0.1`. For direct phone access on a trusted LAN set `T3_BIND_ADDRESS=0.0.0.0`, or keep it loopback-only behind a private reverse proxy.
+Open the existing Cloudflare-Access-protected URL routed by Traefik to
+`t3code:3773`. Use that URL directly; `app.t3.codes` is not part of this
+deployment.
 
 ## GitHub Container Registry
 
@@ -34,7 +34,7 @@ The workflow in `.github/workflows/container.yml` builds and publishes `linux/am
 ghcr.io/<owner>/<repo>
 ```
 
-It runs on pushes to `main`/`master`, manual dispatch, and a daily schedule. Pull requests build only `linux/amd64` and do not push. Scheduled builds read the stable npm `t3` dist-tag and only publish when no image tag exists for that T3 version yet. BuildKit's GitHub Actions cache is exported in `mode=max`; the heavy provider-CLI layer is independent of `T3_VERSION`, so a new T3 stable only invalidates the small T3 install layer.
+It runs on pushes to `main`/`master`, manual dispatch, and a daily schedule. Pull requests build only `linux/amd64` and do not push. Builds use the repository-pinned `T3_VERSION` unless a manual workflow invocation explicitly supplies another version. BuildKit's GitHub Actions cache is exported in `mode=max`; the heavy provider-CLI layer is independent of `T3_VERSION`, so an intentional T3 upgrade only invalidates the small T3 install layer.
 
 Python tests/linting, Node and shell syntax, generated OpenSandbox TOML, and all
 Compose variants are validated before publishing. T3, agent-base, and gateway
@@ -61,7 +61,7 @@ sandbox-gateway
 sandbox-gateway-<t3-version>-<image-build-number>
 ```
 
-For example, when npm `t3@latest` is `0.0.28`, the first image build for that upstream version is tagged `0.0.28-1`.
+For example, the first image build for pinned `t3@0.0.28` is tagged `0.0.28-1`.
 
 After publishing, set this in `.env` if you want Compose to use the pushed image tag instead of a local name:
 
@@ -69,38 +69,22 @@ After publishing, set this in `.env` if you want Compose to use the pushed image
 T3_IMAGE=ghcr.io/<owner>/<repo>:latest
 ```
 
-T3 itself still updates inside the running container: `T3_UPDATE_T3=1` is enabled by default, checks the stable npm version on startup, and installs into `/data/npm-global` only when it is newer. Provider CLI runtime updates are disabled by default with `T3_UPDATE_CODEX=0`, `T3_UPDATE_CLAUDE=0`, `T3_UPDATE_CURSOR=0`, `T3_UPDATE_GROK=0`, and `T3_UPDATE_OPENCODE=0`.
+T3 never self-updates at container startup. Provider CLI runtime updates are
+disabled by default with `T3_UPDATE_CODEX=0`, `T3_UPDATE_CLAUDE=0`,
+`T3_UPDATE_CURSOR=0`, `T3_UPDATE_GROK=0`, and `T3_UPDATE_OPENCODE=0`.
 
-## Direct Browser Access
+## Direct Browser Access and Pairing
 
-T3's native `t3 serve` mode expects remote browsers to pair. For a trusted deployment behind your own private reverse proxy, enable the container auth proxy:
+The browser connects through the existing chain:
 
-```bash
-T3_AUTH_PROXY=1
-T3_AUTH_PROXY_INTERNAL_HOST=127.0.0.1
-T3_AUTH_PROXY_INTERNAL_PORT=13773
-T3_AUTH_PROXY_ADMIN_TTL=2m
+```text
+Browser -> Cloudflare Access/Keycloak -> Traefik -> t3code:3773 -> t3 serve
 ```
 
-With this mode, T3 listens only on the internal host/port and the proxy listens on `T3_SERVER_PORT`. The proxy does not patch T3 and does not use an `unsafe-no-auth` flag; it creates a short-lived local admin bearer session, uses T3's own pairing-token API to mint an administrative browser pairing credential, and immediately consumes that credential for the browser cookie.
-
-To make MCP OAuth less painful in a trusted deployment, enable the web helper:
-
-```bash
-T3_AUTH_WEB_HELPER=1
-T3_AUTH_WEB_HELPER_HOST=0.0.0.0
-T3_AUTH_WEB_HELPER_PORT=13774
-```
-
-With `T3_AUTH_PROXY=1`, open `/auth-tools` on the same T3 host. Without the proxy, Compose maps it to [http://localhost:3774/auth-tools](http://localhost:3774/auth-tools) by default. The helper starts `opencode mcp auth <server>` inside the container and lets you paste the failed browser callback URL back into the container. If `T3_AUTH_WEB_HELPER_TOKEN` is set, open `/auth-tools#token=<value>`; fragments are not sent to reverse-proxy access logs.
-
-The helper only executes allowlisted argument arrays. Additional MCP clients can be added without changing the image:
-
-```bash
-T3_AUTH_WEB_HELPER_COMMANDS_JSON='{"opencode":["t3-auth","opencode","mcp-auth","{server}"],"custom":["custom-cli","mcp","auth","{server}"]}'
-```
-
-The browser can select a profile and server name but cannot supply an arbitrary command. Set a helper token whenever the endpoint is reachable beyond loopback.
+Cloudflare Access protects the edge and keeps the existing Keycloak login.
+T3's own pairing and session management remains enabled as a second,
+independent security layer. Standard HTTP Upgrade forwarding is sufficient for
+the WebSocket; no custom headers or bypass middleware belong in this image.
 
 ## Compose Layouts
 
@@ -110,7 +94,7 @@ The browser can select a profile and server name but cannot supply an arbitrary 
 
 - runs non-root via `T3_UID:T3_GID`
 - can add `T3_WORKSPACE_GID` as a supplementary group for NFS/SMB-backed workspaces
-- maps port `${T3_BIND_ADDRESS}:${T3_PORT}:${T3_SERVER_PORT}`
+- exposes container port `3773` to the Docker network without publishing a host port
 - bind-mounts workspace, T3 state, Codex home, Claude home, and generic tool home
 - keeps npm global installs/cache in Docker volumes because they can be recreated
 
@@ -347,10 +331,19 @@ T3_PROVIDER_MODEL_PREFERENCES_JSON='{"opencode":{"hiddenModels":["provider/model
 
 ## Persistence
 
-- `data/` contains T3 state, provider auth/config homes, MCP OAuth credentials, logs, and generated secrets.
-- `workspace/` is the default project directory shown to T3.
+- `/workspace` is only the host-mounted developer workspace. In production the
+  Docker host mounts the existing NFS share and bind-mounts it here; the
+  container does not mount NFS and never recursively changes workspace
+  ownership.
+- `/data/t3` is the dedicated persistent T3 base directory for server state,
+  SQLite, attachments, worktrees, logs, pairing, and sessions.
+- `/data/home`, `/data/codex`, and `/data/claude-home` are dedicated persistent
+  provider homes. They retain OpenCode configuration, Codex/Claude login state,
+  SSH data, and related user configuration independently of T3 state.
 - `.env` and real files under `config/` are intentionally ignored by git and Docker build context; only `config/*.example.*` belongs in the repository.
-- In `docker-compose.example.yml`, `t3code-npm-global` and `t3code-npm-cache` are Docker volumes. Removing them only forces T3/provider CLI reinstall on next start.
+- `t3code-npm-global` and `t3code-npm-cache` are replaceable provider-update
+  volumes. The pinned T3 binary is always executed from `/usr/local/bin` in the
+  image and cannot be shadowed by stale runtime state.
 
 On Linux, make bind-mounted directories writable by the configured non-root UID/GID:
 
@@ -382,6 +375,7 @@ Interactive auth remains possible:
 ```bash
 docker exec -it t3code t3-auth codex login
 docker exec -it t3code t3-auth claude login
+docker exec -it t3code opencode auth login
 docker exec -it t3code t3-auth cursor login
 docker exec -it t3code t3-auth grok login
 docker exec -it t3code t3-auth gh login
@@ -417,3 +411,36 @@ docker exec -it t3code t3-auth claude env
 docker exec -it t3code t3-auth grok env
 docker exec -it t3code t3-auth gh token
 ```
+
+Run each required interactive provider login once after the persistent home
+volumes are mounted. Credentials remain in those volumes; do not bake them into
+the image, commit them, or copy them into logs.
+
+## Upgrading the Pinned T3 Version
+
+The tested pin is `0.0.28`. An upgrade is intentional rather than automatic:
+
+1. Change `T3_VERSION` together in `Dockerfile`, `.env.example`, and the
+   workflow `env`.
+2. Run `npx --yes t3@<version> serve --help` and verify the Node engine,
+   `--host`, `--port`, `--base-dir`, bootstrap flag, and positional workspace
+   contract.
+3. Re-run the full source checks, Compose validation, image build, and in-image
+   CLI/version checks before publishing a new image.
+
+Do not enable a runtime `t3@latest` install. A manual workflow override is
+acceptable only after the same version-specific checks.
+
+## Deployment Boundary
+
+Cloudflare Access authenticates the edge through the existing Keycloak login;
+T3 pairing and sessions still protect the coding environment behind it. A
+deployment is not proven until a separately authorized live smoke test covers:
+
+```text
+Cloudflare Access -> Keycloak -> Traefik -> WSS -> T3 session
+  -> Codex -> Claude Code -> OpenCode
+```
+
+This repository build does not deploy or alter Cloudflare, Keycloak, Traefik,
+TrueNAS, NFS, or production containers.

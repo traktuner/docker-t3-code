@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 
 import pytest
+
 from t3_sandbox_gateway.config import Settings
 from t3_sandbox_gateway.devcontainer import (
     DevContainerBuilder,
@@ -97,7 +98,51 @@ async def test_build_wraps_non_root_user_with_workspace_group(tmp_path: Path):
     )
     wrapper = next(kwargs for args, kwargs in calls if args[:2] == ("docker", "build"))
     assert "WORKSPACE_GID=3001" in calls[-1][0]
+    assert "CREATE_USER=0" in calls[-1][0]
     assert "usermod -aG" in wrapper["input_text"]
+
+
+@pytest.mark.asyncio
+async def test_build_creates_non_root_user_for_root_base_image(tmp_path: Path):
+    workspace = tmp_path / "repo"
+    workspace.mkdir()
+    write_config(workspace, '{"image":"debian:bookworm"}')
+    builder = DevContainerBuilder(settings(tmp_path))
+    calls = []
+
+    async def fake_run(*args, **kwargs):
+        calls.append((args, kwargs))
+        if args[:3] == ("docker", "image", "inspect"):
+            return json.dumps({"User": "root", "Env": [], "Labels": {}})
+        return ""
+
+    builder._run = fake_run
+    plan = await builder.build(workspace)
+
+    assert plan.image.startswith("t3-agent-devcontainer:")
+    assert "ORIGINAL_USER=t3sandbox" in calls[-1][0]
+    assert "CREATE_USER=1" in calls[-1][0]
+    assert (
+        'useradd --create-home --user-group --shell /bin/sh "$identity"'
+        in calls[-1][1]["input_text"]
+    )
+
+
+@pytest.mark.asyncio
+async def test_build_rejects_explicit_root_user(tmp_path: Path):
+    workspace = tmp_path / "repo"
+    workspace.mkdir()
+    write_config(workspace, '{"image":"debian:bookworm","remoteUser":"root"}')
+    builder = DevContainerBuilder(settings(tmp_path))
+
+    async def fake_run(*args, **kwargs):
+        if args[:3] == ("docker", "image", "inspect"):
+            return json.dumps({"User": "root", "Env": [], "Labels": {}})
+        return ""
+
+    builder._run = fake_run
+    with pytest.raises(DevContainerError, match="must not select the root user"):
+        await builder.build(workspace)
 
 
 @pytest.mark.parametrize(

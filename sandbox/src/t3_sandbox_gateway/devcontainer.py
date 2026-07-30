@@ -64,10 +64,20 @@ WORKSPACE_WRAPPER_DOCKERFILE = r"""# syntax=docker/dockerfile:1.7
 ARG BASE_IMAGE
 FROM ${BASE_IMAGE}
 ARG ORIGINAL_USER
+ARG CREATE_USER
 ARG WORKSPACE_GID
 USER root
 RUN set -eu; \
     identity="${ORIGINAL_USER%%:*}"; \
+    if [ "$CREATE_USER" = "1" ] && ! id -u "$identity" >/dev/null 2>&1; then \
+      if command -v useradd >/dev/null 2>&1; then \
+        useradd --create-home --user-group --shell /bin/sh "$identity"; \
+      elif command -v adduser >/dev/null 2>&1; then \
+        adduser -D "$identity"; \
+      else \
+        echo "Devcontainer image has no supported user management command" >&2; exit 1; \
+      fi; \
+    fi; \
     user_name="$(awk -F: -v identity="$identity" \
       '$1 == identity || $3 == identity { print $1; exit }' /etc/passwd)"; \
     if [ -z "$user_name" ]; then \
@@ -286,16 +296,29 @@ class DevContainerBuilder:
                 failure="devcontainer image build failed",
             )
             image_config = await self._inspect_image(raw_image)
-            user = str(image_config.get("User") or "").strip()
-            if user.lower() in {"", "0", "0:0", "root", "root:root"}:
-                raise DevContainerError(
-                    "devcontainer image must declare a non-root USER; root images are rejected"
-                )
-            if not USER_PATTERN.fullmatch(user):
-                raise DevContainerError("devcontainer image declares an unsupported USER value")
             configs = _metadata_configs(config, image_config)
             _validate_runtime_metadata(configs)
-            await self._wrap_image(raw_image, image, user)
+            configured_user = next(
+                (
+                    str(metadata[key]).strip()
+                    for metadata in reversed(configs)
+                    for key in ("remoteUser", "containerUser")
+                    if metadata.get(key) is not None
+                ),
+                "",
+            )
+            user = configured_user or str(image_config.get("User") or "").strip()
+            create_user = False
+            if user.lower() in {"", "0", "0:0", "root", "root:root"}:
+                if configured_user:
+                    raise DevContainerError(
+                        "devcontainer config must not select the root user"
+                    )
+                user = "t3sandbox"
+                create_user = True
+            if not USER_PATTERN.fullmatch(user):
+                raise DevContainerError("devcontainer image declares an unsupported USER value")
+            await self._wrap_image(raw_image, image, user, create_user=create_user)
 
         image_environment = {}
         for item in image_config.get("Env") or []:
@@ -329,7 +352,9 @@ class DevContainerBuilder:
             ),
         )
 
-    async def _wrap_image(self, base_image: str, image: str, user: str) -> None:
+    async def _wrap_image(
+        self, base_image: str, image: str, user: str, *, create_user: bool
+    ) -> None:
         context = self.settings.devcontainer_user_data / "wrapper-context"
         context.mkdir(parents=True, exist_ok=True)
         await self._run(
@@ -343,6 +368,8 @@ class DevContainerBuilder:
             f"BASE_IMAGE={base_image}",
             "--build-arg",
             f"ORIGINAL_USER={user}",
+            "--build-arg",
+            f"CREATE_USER={int(create_user)}",
             "--build-arg",
             f"WORKSPACE_GID={self.settings.workspace_gid}",
             str(context),

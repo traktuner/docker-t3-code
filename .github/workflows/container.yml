@@ -74,6 +74,7 @@ jobs:
             scripts/github-git-askpass.sh scripts/issue-worker-entrypoint.sh \
             sandbox/gateway-entrypoint.sh
           node --check \
+            scripts/auth-proxy.mjs \
             scripts/configure-cursor-mcp.mjs \
             scripts/cursor-sandbox-wrapper.mjs \
             scripts/provision-opencode-mcp.mjs \
@@ -152,7 +153,6 @@ jobs:
           const repository = process.env.GITHUB_REPOSITORY.toLowerCase();
           const [owner, packageName] = repository.split("/");
           const token = process.env.GITHUB_TOKEN;
-          const eventName = process.env.GITHUB_EVENT_NAME;
 
           function escapeRegExp(value) {
             return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -222,13 +222,12 @@ jobs:
               throw new Error(`Build number must be greater than existing maximum ${maxBuildNumber}`);
             }
 
-            const shouldBuild = eventName !== "schedule" || maxBuildNumber === 0;
             const imageVersion = `${t3Version}-${buildNumber}`;
             const outputs = {
               t3_version: t3Version,
               build_number: String(buildNumber),
               image_version: imageVersion,
-              should_build: String(shouldBuild),
+              should_build: "true",
             };
 
             for (const [key, value] of Object.entries(outputs)) {
@@ -236,7 +235,7 @@ jobs:
             }
             console.log(`T3 stable version: ${t3Version}`);
             console.log(`Image version tag: ${imageVersion}`);
-            console.log(`Scheduled build needed: ${shouldBuild}`);
+            console.log("Image build requested: true");
           }
 
           main().catch((error) => {
@@ -422,9 +421,3 @@ jobs:
           cache-to: |
             type=gha,mode=max,scope=${{ steps.image.outputs.name }}
             type=registry,ref=${{ env.REGISTRY }}/${{ steps.image.outputs.name }}:buildcache,mode=max,ignore-error=true
-
-      - name: Skip unchanged scheduled stable
-        if: steps.version.outputs.should_build != 'true'
-        shell: bash
-        run: |
-          echo "GHCR already has a tag for t3 ${{ steps.version.outputs.t3_version }}; scheduled rebuild skipped."

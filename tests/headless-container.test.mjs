@@ -7,30 +7,30 @@ import { fileURLToPath } from "node:url";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const read = (name) => fs.readFileSync(path.join(root, name), "utf8");
 
-test("pins the official T3 CLI and starts only the headless server", () => {
+test("pins the official T3 CLI and optionally wraps only its browser auth boundary", () => {
   const dockerfile = read("Dockerfile");
   const entrypoint = read("scripts/entrypoint.sh");
   const doctor = read("scripts/t3-doctor.sh");
 
   assert.match(dockerfile, /^ARG T3_VERSION=0\.0\.28$/m);
   assert.match(dockerfile, /^EXPOSE 3773$/m);
-  assert.doesNotMatch(dockerfile, /auth-proxy|mcp-auth-helper|EXPOSE[^\n]*13774/);
+  assert.match(dockerfile, /scripts\/auth-proxy\.mjs/);
+  assert.doesNotMatch(dockerfile, /mcp-auth-helper|EXPOSE[^\n]*13774/);
 
   assert.match(entrypoint, /local t3_binary=\/usr\/local\/bin\/t3/);
   for (const required of [
     "serve",
     "--mode web",
-    '--host "$T3_SERVER_HOST"',
-    '--port "$T3_SERVER_PORT"',
+    '--host "$upstream_host"',
+    '--port "$upstream_port"',
     '--base-dir "$T3CODE_HOME"',
     'args+=("$T3_WORKDIR")',
   ]) {
     assert.ok(entrypoint.includes(required), `missing headless argument: ${required}`);
   }
-  assert.doesNotMatch(
-    entrypoint,
-    /run_t3_with_auth_proxy|T3_AUTH_PROXY|T3_UPDATE_T3|project add/,
-  );
+  assert.match(entrypoint, /node \/opt\/t3-docker\/auth-proxy\.mjs/);
+  assert.match(entrypoint, /T3_AUTH_PROXY_INTERNAL_PORT/);
+  assert.doesNotMatch(entrypoint, /T3_UPDATE_T3|project add/);
   assert.doesNotMatch(doctor, /T3_AUTH_PROXY|T3_AUTH_WEB_HELPER|auth helper/);
 });
 
@@ -51,7 +51,8 @@ test("keeps T3 state, provider homes, and workspace as separate mounts", () => {
       compose,
       /^\s+(ports:|privileged:|cap_add:|network_mode:|pid:)/m,
     );
-    assert.doesNotMatch(compose, /docker\.sock|T3_AUTH_PROXY|T3_AUTH_WEB_HELPER/);
+    assert.match(compose, /T3_AUTH_PROXY:/);
+    assert.doesNotMatch(compose, /docker\.sock|T3_AUTH_WEB_HELPER/);
   }
 });
 

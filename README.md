@@ -4,8 +4,8 @@ This container runs the official T3 Code headless server. All T3 Code upstream p
 
 ## What It Does
 
-- Starts the pinned `/usr/local/bin/t3` exclusively as `t3 serve --mode web --host 0.0.0.0 --port 3773 --base-dir /data/t3 /workspace`.
-- Serves the React web UI and WebSocket endpoint directly; no Electron process, custom remote server, pairing bypass, or `app.t3.codes` dependency is involved.
+- Starts the pinned `/usr/local/bin/t3` exclusively as the official `t3 serve --mode web` server.
+- Can place a small same-container HTTP/WebSocket proxy in front of that server so an already edge-authenticated browser receives a standard T3 browser session without a visible pairing step. No Electron process, replacement T3 server, or `app.t3.codes` dependency is involved.
 - Exposes only container port `3773` to the Docker network. The existing external Traefik route is responsible for reaching it; Compose publishes no host port.
 - Keeps T3 pinned in the image. Provider CLIs are installed in the image and are not updated at runtime unless explicitly enabled.
 - Renders T3 provider settings from `config/t3code.toml` and environment variables.
@@ -34,7 +34,7 @@ The workflow in `.github/workflows/container.yml` builds and publishes `linux/am
 ghcr.io/<owner>/<repo>
 ```
 
-It runs on pushes to `main`/`master`, manual dispatch, and a daily schedule. Pull requests build only `linux/amd64` and do not push. Builds use the repository-pinned `T3_VERSION` unless a manual workflow invocation explicitly supplies another version. BuildKit's GitHub Actions cache is exported in `mode=max`; the heavy provider-CLI layer is independent of `T3_VERSION`, so an intentional T3 upgrade only invalidates the small T3 install layer.
+It runs on pushes to `main`/`master`, manual dispatch, and a daily schedule. Pull requests build only `linux/amd64` and do not push. Every scheduled run publishes a fresh image so provider CLIs and resolved toolchain inputs are refreshed even while T3 stays pinned. Builds use the repository-pinned `T3_VERSION` unless a manual workflow invocation explicitly supplies another version. BuildKit's GitHub Actions cache is exported in `mode=max`; the heavy provider-CLI layer is independent of `T3_VERSION`, so an intentional T3 upgrade only invalidates the small T3 install layer.
 
 Python tests/linting, Node and shell syntax, generated OpenSandbox TOML, and all
 Compose variants are validated before publishing. T3, agent-base, and gateway
@@ -73,18 +73,41 @@ T3 never self-updates at container startup. Provider CLI runtime updates are
 disabled by default with `T3_UPDATE_CODEX=0`, `T3_UPDATE_CLAUDE=0`,
 `T3_UPDATE_CURSOR=0`, `T3_UPDATE_GROK=0`, and `T3_UPDATE_OPENCODE=0`.
 
-## Direct Browser Access and Pairing
+## Direct Browser Access
 
 The browser connects through the existing chain:
 
 ```text
-Browser -> Cloudflare Access/Keycloak -> Traefik -> t3code:3773 -> t3 serve
+Browser -> Cloudflare Access/Keycloak -> Traefik -> t3code:3773
+  -> optional browser-session proxy -> official t3 serve
 ```
 
-Cloudflare Access protects the edge and keeps the existing Keycloak login.
-T3's own pairing and session management remains enabled as a second,
-independent security layer. Standard HTTP Upgrade forwarding is sufficient for
-the WebSocket; no custom headers or bypass middleware belong in this image.
+Cloudflare Access protects the edge and keeps the existing Keycloak login. To
+remove T3's otherwise mandatory browser pairing screen behind that trusted
+edge, enable:
+
+```dotenv
+T3_AUTH_PROXY=1
+T3_AUTH_PROXY_INTERNAL_HOST=127.0.0.1
+T3_AUTH_PROXY_INTERNAL_PORT=13773
+T3_AUTH_PROXY_ADMIN_TTL=2m
+```
+
+The proxy intercepts only T3's session check. When no valid browser session
+exists, it asks the container-local T3 control plane for a two-minute
+administrative credential, creates a one-time browser credential, immediately
+revokes the administrative credential, and returns T3's normal HttpOnly browser
+cookie. HTTP and WebSocket traffic otherwise pass through unchanged. It does
+not retain or expose Electron's 24-hour desktop bootstrap secret.
+
+T3 prevents its current browser session from being revoked through the access
+UI and implements "revoke other clients" as all sessions except the current
+one. If a browser cookie is nevertheless revoked externally, the next session
+check repeats the short-lived local exchange and recovers automatically.
+
+Enabling this makes Cloudflare Access/Keycloak the human authentication
+boundary for the T3 URL. Do not expose port `3773` through a route that bypasses
+that boundary. Standard HTTP Upgrade forwarding is sufficient for WebSockets.
 
 ## Compose Layouts
 
@@ -433,8 +456,11 @@ acceptable only after the same version-specific checks.
 
 ## Deployment Boundary
 
-Cloudflare Access authenticates the edge through the existing Keycloak login;
-T3 pairing and sessions still protect the coding environment behind it. A
+Cloudflare Access authenticates the edge through the existing Keycloak login.
+When `T3_AUTH_PROXY=0`, T3 pairing remains an independent second authentication
+layer. When `T3_AUTH_PROXY=1`, the edge authentication is the human
+authentication boundary and the proxy translates it into a standard T3
+session. A
 deployment is not proven until a separately authorized live smoke test covers:
 
 ```text

@@ -4,6 +4,7 @@ set -Eeuo pipefail
 RUNTIME_ENV=/tmp/t3-docker/runtime.env
 managed_opencode_pid=""
 t3_pid=""
+auth_proxy_pid=""
 mkdir -p \
   "$(dirname "$RUNTIME_ENV")" \
   /data/t3 \
@@ -432,11 +433,11 @@ start_managed_opencode_server() {
 
 cleanup_children() {
   local name pid
-  for name in managed_opencode_pid t3_pid; do
+  for name in managed_opencode_pid auth_proxy_pid t3_pid; do
     pid="${!name:-}"
     [[ -z "$pid" ]] || kill "$pid" >/dev/null 2>&1 || true
   done
-  for name in managed_opencode_pid t3_pid; do
+  for name in managed_opencode_pid auth_proxy_pid t3_pid; do
     pid="${!name:-}"
     [[ -z "$pid" ]] || wait "$pid" >/dev/null 2>&1 || true
   done
@@ -451,11 +452,17 @@ wait_for_supervised_processes() {
 
 run_t3_headless() {
   local t3_binary=/usr/local/bin/t3
+  local upstream_host="$T3_SERVER_HOST"
+  local upstream_port="$T3_SERVER_PORT"
+  if [[ "${T3_AUTH_PROXY:-0}" == "1" ]]; then
+    upstream_host="${T3_AUTH_PROXY_INTERNAL_HOST:-127.0.0.1}"
+    upstream_port="${T3_AUTH_PROXY_INTERNAL_PORT:-13773}"
+  fi
   local -a args=(
     serve
     --mode web
-    --host "$T3_SERVER_HOST"
-    --port "$T3_SERVER_PORT"
+    --host "$upstream_host"
+    --port "$upstream_port"
     --base-dir "$T3CODE_HOME"
   )
 
@@ -469,15 +476,45 @@ run_t3_headless() {
     exit 1
   fi
 
-  echo "Starting official T3 headless server on http://${T3_SERVER_HOST}:${T3_SERVER_PORT} with base dir ${T3CODE_HOME} and workspace ${T3_WORKDIR}"
-  if [[ -z "${managed_opencode_pid:-}" ]]; then
+  echo "Starting official T3 headless server on http://${upstream_host}:${upstream_port} with base dir ${T3CODE_HOME} and workspace ${T3_WORKDIR}"
+  if [[ "${T3_AUTH_PROXY:-0}" != "1" && -z "${managed_opencode_pid:-}" ]]; then
     exec "$t3_binary" "${args[@]}"
   fi
 
   "$t3_binary" "${args[@]}" &
   t3_pid="$!"
+  if [[ "${T3_AUTH_PROXY:-0}" == "1" ]]; then
+    for _ in $(seq 1 60); do
+      if ! kill -0 "$t3_pid" 2>/dev/null; then
+        echo "T3 exited before its internal endpoint became ready." >&2
+        wait "$t3_pid" || true
+        exit 1
+      fi
+      if curl --connect-timeout 1 --max-time 2 -fsS \
+        "http://${upstream_host}:${upstream_port}/" >/dev/null 2>&1; then
+        break
+      fi
+      sleep 0.5
+    done
+    if ! curl --connect-timeout 1 --max-time 2 -fsS \
+      "http://${upstream_host}:${upstream_port}/" >/dev/null 2>&1; then
+      echo "T3 internal endpoint did not become ready." >&2
+      cleanup_children
+      exit 1
+    fi
+
+    echo "Starting authenticated browser handoff on http://${T3_SERVER_HOST}:${T3_SERVER_PORT}"
+    T3_AUTH_PROXY_LISTEN_HOST="$T3_SERVER_HOST" \
+      T3_AUTH_PROXY_LISTEN_PORT="$T3_SERVER_PORT" \
+      T3_AUTH_PROXY_UPSTREAM_HOST="$upstream_host" \
+      T3_AUTH_PROXY_UPSTREAM_PORT="$upstream_port" \
+      node /opt/t3-docker/auth-proxy.mjs &
+    auth_proxy_pid="$!"
+  fi
+
   trap cleanup_children TERM INT
   local -a supervised_pids=("$t3_pid")
+  [[ -z "${auth_proxy_pid:-}" ]] || supervised_pids+=("$auth_proxy_pid")
   [[ -z "${managed_opencode_pid:-}" ]] || supervised_pids+=("$managed_opencode_pid")
   wait_for_supervised_processes "${supervised_pids[@]}"
 }

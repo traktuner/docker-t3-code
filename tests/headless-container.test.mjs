@@ -61,3 +61,18 @@ test("keeps the repository T3 pin synchronized", () => {
   assert.match(read(".github/workflows/container.yml"), /^\s+T3_VERSION: 0\.0\.28$/m);
   assert.doesNotMatch(read("config/t3code.example.toml"), /^\[auth\]$/m);
 });
+
+test("starts the sandbox MCP from sanitized harness environments", () => {
+  const bridge = read("scripts/t3-sandbox-mcp.mjs");
+
+  assert.match(
+    bridge,
+    /T3_SANDBOX_URL \|\| "http:\/\/t3-sandbox-gateway:8090"/,
+  );
+  assert.match(
+    bridge,
+    /T3_SANDBOX_TOKEN_FILE \|\|\s*"\/run\/t3-sandbox-secrets\/gateway-token"/,
+  );
+  assert.match(bridge, /readFileSync\(tokenFile, "utf8"\)\.trim\(\)/);
+  assert.match(bridge, /!Array\.isArray\(value\)/);
+});

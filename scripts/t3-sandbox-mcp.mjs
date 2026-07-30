@@ -1,11 +1,24 @@
 #!/usr/bin/env node
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 
-const baseUrl = (process.env.T3_SANDBOX_URL || "").replace(/\/$/, "");
-const token = process.env.T3_SANDBOX_TOKEN || "";
+const baseUrl = (
+  process.env.T3_SANDBOX_URL || "http://t3-sandbox-gateway:8090"
+).replace(/\/$/, "");
+const tokenFile =
+  process.env.T3_SANDBOX_TOKEN_FILE ||
+  "/run/t3-sandbox-secrets/gateway-token";
+let token = process.env.T3_SANDBOX_TOKEN || "";
+if (!token && tokenFile) {
+  try {
+    token = readFileSync(tokenFile, "utf8").trim();
+  } catch {
+    // The common validation below reports the missing credential uniformly.
+  }
+}
 const defaultWorkspace = process.env.T3_SANDBOX_WORKSPACE || process.cwd();
 const lockWorkspace = /^(?:1|true|yes|on)$/i.test(
   process.env.T3_SANDBOX_LOCK_WORKSPACE || "",
@@ -105,7 +118,10 @@ async function withProgress(extra, message, operation) {
 function result(value) {
   return {
     content: [{ type: "text", text: JSON.stringify(value, null, 2) }],
-    structuredContent: value && typeof value === "object" ? value : undefined,
+    structuredContent:
+      value && typeof value === "object" && !Array.isArray(value)
+        ? value
+        : undefined,
   };
 }
 

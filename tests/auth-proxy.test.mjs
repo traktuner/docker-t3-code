@@ -64,12 +64,14 @@ test("creates, preserves, and recovers a revoked browser session", async (t) => 
     if (req.method === "POST" && req.url === "/api/auth/pairing-token") {
       calls.pairing += 1;
       assert.equal(req.headers.authorization, "Bearer admin-token");
+      assert.equal(req.headers.cookie, undefined);
       res.writeHead(200, { "content-type": "application/json" });
       res.end(JSON.stringify({ credential: "pair-once" }));
       return;
     }
     if (req.method === "POST" && req.url === "/api/auth/browser-session") {
       calls.exchange += 1;
+      assert.equal(req.headers.cookie, undefined);
       activeBrowserToken = `browser-token-${calls.exchange}`;
       let body = "";
       for await (const chunk of req) body += chunk;

@@ -70,10 +70,6 @@ function cookieHeader(setCookies) {
     .join("; ");
 }
 
-function mergedCookieHeader(existing, setCookies) {
-  return [existing, cookieHeader(setCookies)].filter(Boolean).join("; ");
-}
-
 function sendJson(res, status, body, setCookies = []) {
   const payload = typeof body === "string" ? body : JSON.stringify(body);
   const headers = {
@@ -147,13 +143,15 @@ async function revokeTemporaryAdministrativeToken(sessionId) {
 }
 
 async function issueOneTimePairingCredential(req, bearerToken) {
+  const headers = upstreamRequestHeaders(req.headers, {
+    accept: "application/json",
+    authorization: `Bearer ${bearerToken}`,
+    "content-type": "application/json",
+  });
+  delete headers.cookie;
   const response = await fetchUpstream("/api/auth/pairing-token", {
     method: "POST",
-    headers: upstreamRequestHeaders(req.headers, {
-      accept: "application/json",
-      authorization: `Bearer ${bearerToken}`,
-      "content-type": "application/json",
-    }),
+    headers,
     body: JSON.stringify({
       label: "Authenticated reverse-proxy browser",
       scopes: adminScopes,
@@ -171,12 +169,14 @@ async function issueOneTimePairingCredential(req, bearerToken) {
 }
 
 async function exchangeBrowserSession(req, credential) {
+  const headers = upstreamRequestHeaders(req.headers, {
+    accept: "application/json",
+    "content-type": "application/json",
+  });
+  delete headers.cookie;
   return fetchUpstream("/api/auth/browser-session", {
     method: "POST",
-    headers: upstreamRequestHeaders(req.headers, {
-      accept: "application/json",
-      "content-type": "application/json",
-    }),
+    headers,
     body: JSON.stringify({ credential }),
   });
 }
@@ -227,7 +227,7 @@ async function ensureBrowserSession(req, res) {
       method: "GET",
       headers: upstreamRequestHeaders(req.headers, {
         accept: "application/json",
-        cookie: mergedCookieHeader(req.headers.cookie, browserCookies),
+        cookie: cookieHeader(browserCookies),
       }),
     });
     const authenticatedText = await authenticated.text();

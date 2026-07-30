@@ -47,13 +47,110 @@ jobs:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
+      - name: Check whether a scheduled T3 release build is needed
+        id: schedule_gate
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPOSITORY: ${{ github.repository }}
+          PINNED_T3_VERSION: ${{ env.T3_VERSION }}
+        run: |
+          set -euo pipefail
+
+          if [[ "$EVENT_NAME" != "schedule" ]]; then
+            echo "t3_version=$PINNED_T3_VERSION" >> "$GITHUB_OUTPUT"
+            echo "should_build=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          node <<'NODE'
+          const fs = require("node:fs");
+
+          const repository = process.env.REPOSITORY.toLowerCase();
+          const [owner, packageName] = repository.split("/");
+          const token = process.env.GITHUB_TOKEN;
+
+          function escapeRegExp(value) {
+            return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+          }
+
+          function parseNextLink(linkHeader) {
+            if (!linkHeader) return null;
+            for (const part of linkHeader.split(",")) {
+              const [rawUrl, rawRel] = part.split(";").map((value) => value.trim());
+              if (rawRel === 'rel="next"') return rawUrl.slice(1, -1);
+            }
+            return null;
+          }
+
+          async function fetchPackageVersions(baseUrl) {
+            const versions = [];
+            let url = `${baseUrl}?per_page=100`;
+            while (url) {
+              const response = await fetch(url, {
+                headers: {
+                  accept: "application/vnd.github+json",
+                  authorization: `Bearer ${token}`,
+                  "x-github-api-version": "2026-03-10",
+                },
+              });
+              if (response.status === 404) return null;
+              if (!response.ok) {
+                throw new Error(`GitHub package API returned HTTP ${response.status}`);
+              }
+              versions.push(...(await response.json()));
+              url = parseNextLink(response.headers.get("link"));
+            }
+            return versions;
+          }
+
+          async function main() {
+            const latestResponse = await fetch("https://registry.npmjs.org/t3/latest");
+            if (!latestResponse.ok) {
+              throw new Error(`npm registry returned HTTP ${latestResponse.status} for t3@latest`);
+            }
+            const latest = await latestResponse.json();
+            if (typeof latest.version !== "string" || latest.version.length === 0) {
+              throw new Error("npm registry did not return a t3@latest version");
+            }
+
+            const encodedPackage = encodeURIComponent(packageName);
+            const userUrl = `https://api.github.com/users/${owner}/packages/container/${encodedPackage}/versions`;
+            const orgUrl = `https://api.github.com/orgs/${owner}/packages/container/${encodedPackage}/versions`;
+            const versions =
+              (await fetchPackageVersions(userUrl)) ??
+              (await fetchPackageVersions(orgUrl)) ??
+              [];
+            const tags = versions.flatMap((version) => version.metadata?.container?.tags ?? []);
+            const alreadyPublished = tags.some((tag) =>
+              new RegExp(`^${escapeRegExp(latest.version)}-\\d+$`).test(tag),
+            );
+
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, `t3_version=${latest.version}\n`);
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, `should_build=${alreadyPublished ? "false" : "true"}\n`);
+            console.log(
+              alreadyPublished
+                ? `T3 ${latest.version} is already published; skipping scheduled build.`
+                : `T3 ${latest.version} is new; scheduled build requested.`,
+            );
+          }
+
+          main().catch((error) => {
+            console.error(error);
+            process.exit(1);
+          });
+          NODE
+
       - name: Set up uv
+        if: steps.schedule_gate.outputs.should_build == 'true'
         uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
         with:
           enable-cache: true
           cache-dependency-glob: sandbox/uv.lock
 
       - name: Validate sources and Compose files
+        if: steps.schedule_gate.outputs.should_build == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -91,11 +188,13 @@ jobs:
             docker compose -f sandbox/docker-compose.example.yml config --quiet
 
       - name: Normalize image name
+        if: steps.schedule_gate.outputs.should_build == 'true'
         id: image
         shell: bash
         run: echo "name=${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
 
       - name: Resolve build platforms
+        if: steps.schedule_gate.outputs.should_build == 'true'
         id: platforms
         shell: bash
         env:
@@ -124,10 +223,11 @@ jobs:
           echo "Build platforms: $platforms"
 
       - name: Set up QEMU
-        if: contains(steps.platforms.outputs.platforms, 'arm64')
+        if: steps.schedule_gate.outputs.should_build == 'true' && contains(steps.platforms.outputs.platforms, 'arm64')
         uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8 # v4.2.0
 
       - name: Set up Docker Buildx
+        if: steps.schedule_gate.outputs.should_build == 'true'
         uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
 
       - name: Resolve T3 version tag
@@ -135,15 +235,15 @@ jobs:
         shell: bash
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EVENT_NAME: ${{ github.event_name }}
           REQUESTED_T3_VERSION: ${{ github.event.inputs.t3_version || '' }}
           REQUESTED_BUILD_NUMBER: ${{ github.event.inputs.build_number || '' }}
+          SCHEDULED_T3_VERSION: ${{ steps.schedule_gate.outputs.t3_version }}
+          SCHEDULED_SHOULD_BUILD: ${{ steps.schedule_gate.outputs.should_build }}
         run: |
           set -euo pipefail
 
-          t3_version="${REQUESTED_T3_VERSION}"
-          if [[ -z "$t3_version" ]]; then
-            t3_version="${T3_VERSION}"
-          fi
+          t3_version="${REQUESTED_T3_VERSION:-${SCHEDULED_T3_VERSION:-$T3_VERSION}}"
 
           node - "$t3_version" "$REQUESTED_BUILD_NUMBER" <<'NODE'
           const fs = require("node:fs");
@@ -223,11 +323,13 @@ jobs:
             }
 
             const imageVersion = `${t3Version}-${buildNumber}`;
+            const shouldBuild =
+              process.env.EVENT_NAME !== "schedule" || process.env.SCHEDULED_SHOULD_BUILD === "true";
             const outputs = {
               t3_version: t3Version,
               build_number: String(buildNumber),
               image_version: imageVersion,
-              should_build: "true",
+              should_build: shouldBuild ? "true" : "false",
             };
 
             for (const [key, value] of Object.entries(outputs)) {
@@ -235,7 +337,7 @@ jobs:
             }
             console.log(`T3 stable version: ${t3Version}`);
             console.log(`Image version tag: ${imageVersion}`);
-            console.log("Image build requested: true");
+            console.log(`Image build requested: ${shouldBuild}`);
           }
 
           main().catch((error) => {
@@ -243,6 +345,10 @@ jobs:
             process.exit(1);
           });
           NODE
+
+          if [[ "$EVENT_NAME" == "schedule" && "$SCHEDULED_SHOULD_BUILD" != "true" ]]; then
+            exit 0
+          fi
 
           echo "codex_version=$(npm view @openai/codex version)" >> "$GITHUB_OUTPUT"
           echo "claude_version=$(npm view @anthropic-ai/claude-code version)" >> "$GITHUB_OUTPUT"

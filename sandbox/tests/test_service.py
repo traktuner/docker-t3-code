@@ -7,10 +7,10 @@ from pathlib import Path
 import pytest
 from t3_sandbox_gateway.backend import BackendExecution, BackendStatus
 from t3_sandbox_gateway.config import Settings
-from t3_sandbox_gateway.devcontainer import DevContainerPlan
+from t3_sandbox_gateway.devcontainer import DevContainerPlan, LifecycleStage
 from t3_sandbox_gateway.models import CreateSandboxRequest, ExecuteRequest
 from t3_sandbox_gateway.paths import WorkspaceMapper
-from t3_sandbox_gateway.service import SandboxService, SandboxStateError
+from t3_sandbox_gateway.service import LifecycleError, SandboxService, SandboxStateError
 from t3_sandbox_gateway.store import LeaseStore, WorkspaceBusyError
 
 
@@ -53,6 +53,17 @@ class BlockingBackend(FakeBackend):
         self.started.set()
         await self.release.wait()
         return await super().create(**kwargs)
+
+
+class FailingLifecycleBackend(FakeBackend):
+    async def execute(
+        self, upstream_id, command, working_directory, timeout_seconds
+    ) -> BackendExecution:
+        return BackendExecution(
+            exit_code=1,
+            stdout="Resolving dependencies",
+            stderr="error: @effect/tsgo@catalog: failed to resolve",
+        )
 
 
 class FakeDevContainers:
@@ -107,6 +118,26 @@ def service(
         ),
         backend,
     )
+
+
+@pytest.mark.asyncio
+async def test_lifecycle_error_includes_bounded_command_output(tmp_path: Path):
+    subject, _backend = service(tmp_path, FailingLifecycleBackend())
+    plan = DevContainerPlan(
+        image="devcontainer:test",
+        environment={},
+        lifecycle=(
+            LifecycleStage(name="postCreateCommand", commands=("bun install",)),
+        ),
+        image_path="/usr/bin:/bin",
+    )
+
+    with pytest.raises(
+        LifecycleError,
+        match=r"postCreateCommand failed with exit code 1: "
+        r"error: @effect/tsgo@catalog: failed to resolve",
+    ):
+        await subject._run_lifecycle("upstream-1", plan, "/workspace/repo")
 
 
 @pytest.mark.asyncio

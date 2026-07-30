@@ -296,8 +296,17 @@ class SandboxService:
                 None,
             )
             if failed is not None:
+                output = "\n".join(
+                    part.strip()
+                    for part in (failed.stderr, failed.stdout)
+                    if part.strip()
+                )
+                if len(output) > 2000:
+                    output = output[:2000] + "\n[output truncated]"
+                detail = f": {output}" if output else ""
                 raise LifecycleError(
-                    f"devcontainer {stage.name} failed with exit code {failed.exit_code}"
+                    f"devcontainer {stage.name} failed with exit code "
+                    f"{failed.exit_code}{detail}"
                 )
 
     async def _is_reusable(self, lease: Lease) -> bool:

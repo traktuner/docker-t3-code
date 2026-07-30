@@ -2,7 +2,6 @@ import json
 from pathlib import Path
 
 import pytest
-
 from t3_sandbox_gateway.config import Settings
 from t3_sandbox_gateway.devcontainer import (
     DevContainerBuilder,

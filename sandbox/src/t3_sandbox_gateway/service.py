@@ -257,6 +257,12 @@ class SandboxService:
             "T3_SANDBOX": "1",
             "T3_SANDBOX_WORKSPACE": workspace,
             "T3_SANDBOX_CACHE": root,
+            # Network-backed worktrees can preserve an owner UID that differs
+            # from the fixed unprivileged worker. Trust only the worktree that
+            # the gateway already authorized and mounted for this sandbox.
+            "GIT_CONFIG_COUNT": "1",
+            "GIT_CONFIG_KEY_0": "safe.directory",
+            "GIT_CONFIG_VALUE_0": workspace,
             "PATH": path,
             "NPM_CONFIG_PREFIX": f"{root}/npm-global",
             "NPM_CONFIG_CACHE": f"{root}/npm-cache",

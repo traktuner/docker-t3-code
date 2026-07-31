@@ -17,11 +17,13 @@ from t3_sandbox_gateway.store import LeaseStore, WorkspaceBusyError
 class FakeBackend:
     def __init__(self):
         self.created = 0
+        self.create_requests: list[dict] = []
         self.destroyed: list[str] = []
         self.renewed: list[tuple[str, int]] = []
 
-    async def create(self, **_kwargs) -> str:
+    async def create(self, **kwargs) -> str:
         self.created += 1
+        self.create_requests.append(kwargs)
         return f"upstream-{self.created}"
 
     async def execute(
@@ -152,6 +154,19 @@ async def test_reuses_one_active_sandbox_per_workspace(tmp_path: Path):
     assert first.id == second.id
     assert backend.created == 1
     assert backend.renewed == [("upstream-1", 600)]
+
+
+@pytest.mark.asyncio
+async def test_creation_marks_only_the_mounted_workspace_as_git_safe(tmp_path: Path):
+    (tmp_path / "repo").mkdir()
+    subject, backend = service(tmp_path)
+
+    await subject.create(CreateSandboxRequest(workspace="/workspace/repo"))
+
+    environment = backend.create_requests[0]["environment"]
+    assert environment["GIT_CONFIG_COUNT"] == "1"
+    assert environment["GIT_CONFIG_KEY_0"] == "safe.directory"
+    assert environment["GIT_CONFIG_VALUE_0"] == "/workspace/repo"
 
 
 @pytest.mark.asyncio

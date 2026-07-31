@@ -31,7 +31,11 @@ flowchart LR
 
 The gateway preserves linked Git worktrees by mounting their Git common
 directory at the same in-container path. This keeps normal `git status`, commit,
-and branch operations working without exposing unrelated workspace trees.
+and branch operations working without exposing unrelated workspace trees. Each
+worker also receives a command-scope Git `safe.directory` for exactly its
+gateway-authorized worktree. This supports group-writable network shares whose
+persisted owner UID differs from the fixed worker UID without trusting every
+repository through a wildcard.
 
 ## Agent Base Image
 

@@ -35,3 +35,16 @@ For every repository task:
 Remote MCP servers may still be used for their intended external services.
 Never expose model, provider, GitHub, or other host credentials inside a coding
 sandbox unless the deployment explicitly provides a scoped credential.
+
+## SSH and Ansible deployments
+
+For SSH and Ansible work from a sandbox, use the pre-provisioned Semaphore
+deployment identity. Its private key is already available only inside the
+sandbox at `/home/agent/.ssh/semaphore_ed25519`; `ANSIBLE_PRIVATE_KEY_FILE`
+already points to it. Use the repository inventory (for example,
+`ansible-playbook -i inventory/hosts.yml ...`) so host, user, port, and
+host-key policy come from the declared inventory. Do not search for, generate,
+copy, retrieve from Proton Pass, or try alternative SSH keys. In particular,
+for `slvpdocker01`, use the inventory entry and this Semaphore identity rather
+than trying an interactive `ssh` login or guessing an address, user, port, or
+key path.

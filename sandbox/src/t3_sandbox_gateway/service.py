@@ -282,6 +282,8 @@ class SandboxService:
         }
         if self.settings.proton_pass_broker_host_path is not None:
             managed["PROTON_PASS_BROKER_SOCKET"] = "/run/proton-pass/broker.sock"
+        if self.settings.ssh_host_path is not None:
+            managed["ANSIBLE_PRIVATE_KEY_FILE"] = "/home/agent/.ssh/semaphore_ed25519"
         return {**plan.environment, **managed}
 
     async def _run_lifecycle(

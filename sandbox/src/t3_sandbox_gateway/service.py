@@ -280,6 +280,8 @@ class SandboxService:
             "GRADLE_USER_HOME": f"{root}/gradle",
             "MAVEN_CONFIG": f"{root}/maven",
         }
+        if self.settings.proton_pass_broker_host_path is not None:
+            managed["PROTON_PASS_BROKER_SOCKET"] = "/run/proton-pass/broker.sock"
         return {**plan.environment, **managed}
 
     async def _run_lifecycle(

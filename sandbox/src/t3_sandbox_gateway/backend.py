@@ -119,6 +119,24 @@ class OpenSandboxBackend:
                 readOnly=False,
             ),
         ]
+        if self.settings.proton_pass_broker_host_path is not None:
+            volumes.append(
+                Volume(
+                    name="proton-pass-broker",
+                    host=Host(path=str(self.settings.proton_pass_broker_host_path)),
+                    mountPath="/run/proton-pass",
+                    readOnly=True,
+                )
+            )
+        if self.settings.ssh_host_path is not None:
+            volumes.append(
+                Volume(
+                    name="infra-ssh",
+                    host=Host(path=str(self.settings.ssh_host_path)),
+                    mountPath="/home/agent/.ssh",
+                    readOnly=True,
+                )
+            )
         if git_common_host is not None and git_common_target is not None:
             volumes.append(
                 Volume(

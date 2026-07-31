@@ -165,6 +165,8 @@ Important gateway variables:
 | `T3_SANDBOX_HOST_WORKSPACE_ROOT` | `/workspaces` | Canonical host workspace root |
 | `T3_SANDBOX_CLIENT_WORKSPACE_ROOT` | `/workspace` | Matching path visible to T3 |
 | `T3_SANDBOX_BASE_IMAGE` | `...:agent-base` | Default worker image |
+| `T3_SANDBOX_PROTON_PASS_BROKER_HOST_PATH` | empty | Optional host directory containing the T3 broker socket, mounted read-only at `/run/proton-pass` in each worker |
+| `T3_SANDBOX_SSH_HOST_PATH` | empty | Optional host SSH directory, mounted read-only at `/home/agent/.ssh` in each worker |
 | `T3_SANDBOX_MAX_CONCURRENT` | `4` | Global active lease limit |
 | `T3_SANDBOX_DEFAULT_TTL_SECONDS` | `7200` | Default worker lifetime |
 | `T3_SANDBOX_MAX_TTL_SECONDS` | `28800` | Maximum worker lifetime |

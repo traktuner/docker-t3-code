@@ -21,6 +21,8 @@ def settings(tmp_path: Path) -> Settings:
         state_db=tmp_path / "state.db",
         base_image="agent-base:test",
         cache_volume="cache",
+        proton_pass_broker_host_path=None,
+        ssh_host_path=None,
         devcontainer_user_data=tmp_path / "devcontainers",
         devcontainer_enabled=True,
         devcontainer_feature_prefixes=("ghcr.io/devcontainers/features/",),

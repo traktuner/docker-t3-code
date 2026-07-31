@@ -11,7 +11,7 @@ type = "docker"
 execd_image = @@EXECD_IMAGE@@
 
 [storage]
-allowed_host_paths = [@@HOST_WORKSPACE_ROOT@@]
+allowed_host_paths = [@@ALLOWED_HOST_PATHS@@]
 volume_default_size = "1Gi"
 
 [store]

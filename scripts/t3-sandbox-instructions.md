@@ -31,6 +31,10 @@ For every repository task:
 7. If sandbox creation or execution fails, report that infrastructure failure.
    Do not retry a blocked local tool. Use the sandbox-backed `bash` alias or the
    MCP tools instead; never fall back to local execution or local file mutation.
+8. Repository safety rules still apply, including their approval boundaries.
+   When the user explicitly authorizes commit, push, or a production deployment,
+   perform it through the repository-approved workflow; do not incorrectly claim
+   that this managed sandbox policy itself forbids an authorized operation.
 
 Remote MCP servers may still be used for their intended external services.
 Never expose model, provider, GitHub, or other host credentials inside a coding

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from datetime import timedelta
 from pathlib import Path
@@ -147,25 +148,32 @@ class OpenSandboxBackend:
                 )
             )
 
-        sandbox = await Sandbox.create(
-            image,
-            connection_config=self._connection(),
-            timeout=timedelta(seconds=ttl_seconds),
-            ready_timeout=timedelta(seconds=90),
-            resource={
-                "cpu": self.settings.cpu_limit,
-                "memory": self.settings.memory_limit,
-            },
-            env=environment,
-            metadata={"t3.workspace": workspace_hash},
-            network_policy=self._network_policy(),
-            volumes=volumes,
-            entrypoint=[
-                "/bin/sh",
-                "-c",
-                "trap 'exit 0' TERM INT; while :; do sleep 3600; done",
-            ],
-        )
+        for attempt in range(3):
+            try:
+                sandbox = await Sandbox.create(
+                    image,
+                    connection_config=self._connection(),
+                    timeout=timedelta(seconds=ttl_seconds),
+                    ready_timeout=timedelta(seconds=90),
+                    resource={
+                        "cpu": self.settings.cpu_limit,
+                        "memory": self.settings.memory_limit,
+                    },
+                    env=environment,
+                    metadata={"t3.workspace": workspace_hash},
+                    network_policy=self._network_policy(),
+                    volumes=volumes,
+                    entrypoint=[
+                        "/bin/sh",
+                        "-c",
+                        "trap 'exit 0' TERM INT; while :; do sleep 3600; done",
+                    ],
+                )
+                break
+            except Exception as exc:
+                if "failed to bind host port" not in str(exc) or attempt == 2:
+                    raise
+                await asyncio.sleep(0.5 * (attempt + 1))
         try:
             return sandbox.id
         finally:

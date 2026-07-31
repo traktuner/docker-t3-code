@@ -83,3 +83,48 @@ async def test_create_mounts_broker_and_ssh_for_infra_worker(monkeypatch, tmp_pa
     assert mounts["/run/proton-pass"].read_only is True
     assert mounts["/home/agent/.ssh"].host.path == "/srv/semaphore/ssh-keys"
     assert mounts["/home/agent/.ssh"].read_only is True
+
+
+@pytest.mark.asyncio
+async def test_create_retries_transient_docker_port_collision(monkeypatch, tmp_path: Path) -> None:
+    attempts = 0
+
+    class CreatedSandbox:
+        id = "sandbox-after-retry"
+
+        async def close(self) -> None:
+            return None
+
+    async def create(*_args, **_kwargs):
+        nonlocal attempts
+        attempts += 1
+        if attempts < 3:
+            raise RuntimeError("failed to bind host port 0.0.0.0:40070/tcp: address already in use")
+        return CreatedSandbox()
+
+    async def no_sleep(_seconds: float) -> None:
+        return None
+
+    monkeypatch.setattr("t3_sandbox_gateway.backend.Sandbox.create", create)
+    monkeypatch.setattr("t3_sandbox_gateway.backend.asyncio.sleep", no_sleep)
+    settings = Settings(
+        gateway_token="test", opensandbox_domain="opensandbox:8080",
+        opensandbox_api_key="test", client_workspace_root="/workspace",
+        host_workspace_root=tmp_path, state_db=tmp_path / "state.db",
+        base_image="agent-base:test", cache_volume="cache",
+        proton_pass_broker_host_path=None, ssh_host_path=None,
+        devcontainer_user_data=tmp_path / "devcontainers", devcontainer_enabled=True,
+        devcontainer_feature_prefixes=(), devcontainer_platform="linux/amd64",
+        workspace_gid=3001, default_ttl_seconds=600, max_ttl_seconds=3600,
+        max_sandboxes=2, command_timeout_seconds=60, max_output_bytes=262144,
+        build_timeout_seconds=60, cpu_limit="1", memory_limit="1Gi", egress_allow=(),
+    )
+
+    result = await OpenSandboxBackend(settings).create(
+        image="agent-base:test", host_path=tmp_path, mount_path="/workspace/repo",
+        git_common_host=None, git_common_target=None, ttl_seconds=600,
+        environment={}, workspace_hash="test",
+    )
+
+    assert result == "sandbox-after-retry"
+    assert attempts == 3

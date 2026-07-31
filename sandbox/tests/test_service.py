@@ -6,7 +6,6 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
-
 from t3_sandbox_gateway.backend import BackendExecution, BackendStatus
 from t3_sandbox_gateway.config import Settings
 from t3_sandbox_gateway.devcontainer import DevContainerPlan, LifecycleStage

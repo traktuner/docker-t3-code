@@ -149,7 +149,7 @@ in the main container. A private MCP bridge asks a policy gateway to create a
 short-lived non-root OpenSandbox worker for exactly one Git worktree.
 
 The worker starts from the published `agent-base` image and already contains
-common build/debug tools plus FFmpeg, ImageMagick, libvips, ExifTool, MediaInfo,
+the current official Docker CE CLI and Compose plugin, Ansible, common build/debug tools plus FFmpeg, ImageMagick, libvips, ExifTool, MediaInfo,
 Poppler, Tesseract OCR, Pandoc, Graphviz, SoX, HEIF/WebP tools, and lossless image
 optimizers. Headless Chromium/Xvfb, QR decoding, fast search, native debugging,
 coverage, benchmark, archive, and XML tools are also included. npm, uv/pip,

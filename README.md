@@ -61,7 +61,7 @@ sandbox-gateway
 sandbox-gateway-<t3-version>-<image-build-number>
 ```
 
-For example, the first image build for pinned `t3@0.0.28` is tagged `0.0.28-1`.
+For example, the first image build for pinned `t3@0.0.31` is tagged `0.0.31-1`.
 
 After publishing, set this in `.env` if you want Compose to use the pushed image tag instead of a local name:
 
@@ -444,7 +444,7 @@ the image, commit them, or copy them into logs.
 
 ## Upgrading the Pinned T3 Version
 
-The tested pin is `0.0.28`. An upgrade is intentional rather than automatic:
+The tested pin is `0.0.31`. An upgrade is intentional rather than automatic:
 
 1. Change `T3_VERSION` together in `Dockerfile`, `.env.example`, and the
    workflow `env`.

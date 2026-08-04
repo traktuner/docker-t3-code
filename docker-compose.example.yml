@@ -12,7 +12,7 @@ services:
     build:
       context: .
       args:
-        T3_VERSION: ${T3_VERSION:-0.0.28}
+        T3_VERSION: ${T3_VERSION:-0.0.31}
     image: ${T3_IMAGE:-local/t3code:latest}
     container_name: t3code
     restart: unless-stopped

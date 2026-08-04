@@ -12,7 +12,7 @@ test("pins the official T3 CLI and optionally wraps only its browser auth bounda
   const entrypoint = read("scripts/entrypoint.sh");
   const doctor = read("scripts/t3-doctor.sh");
 
-  assert.match(dockerfile, /^ARG T3_VERSION=0\.0\.28$/m);
+  assert.match(dockerfile, /^ARG T3_VERSION=0\.0\.31$/m);
   assert.match(dockerfile, /^EXPOSE 3773$/m);
   assert.match(dockerfile, /scripts\/auth-proxy\.mjs/);
   assert.doesNotMatch(dockerfile, /mcp-auth-helper|EXPOSE[^\n]*13774/);
@@ -57,9 +57,22 @@ test("keeps T3 state, provider homes, and workspace as separate mounts", () => {
 });
 
 test("keeps the repository T3 pin synchronized", () => {
-  assert.match(read(".env.example"), /^T3_VERSION=0\.0\.28$/m);
-  assert.match(read(".github/workflows/container.yml"), /^\s+T3_VERSION: 0\.0\.28$/m);
+  assert.match(read(".env.example"), /^T3_VERSION=0\.0\.31$/m);
+  assert.match(read(".github/workflows/container.yml"), /^\s+T3_VERSION: 0\.0\.31$/m);
+  assert.match(read("docker-compose.yml"), /T3_VERSION:-0\.0\.31/);
+  assert.match(read("docker-compose.example.yml"), /T3_VERSION:-0\.0\.31/);
   assert.doesNotMatch(read("config/t3code.example.toml"), /^\[auth\]$/m);
+});
+
+test("installs and validates Claude Code's platform-native optional binary", () => {
+  const installer = read("scripts/install-provider-clis.sh");
+
+  assert.match(installer, /--include=optional/);
+  assert.match(
+    installer,
+    /node \/usr\/local\/lib\/node_modules\/@anthropic-ai\/claude-code\/install\.cjs/,
+  );
+  assert.match(installer, /claude --version >\/dev\/null/);
 });
 
 test("starts the sandbox MCP from sanitized harness environments", () => {

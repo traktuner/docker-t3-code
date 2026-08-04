@@ -147,7 +147,7 @@ RUN bun_installer="$(mktemp)" \
       [ ! -e "$bin" ] || chmod +x "$bin"; \
     done
 
-ARG T3_VERSION=0.0.28
+ARG T3_VERSION=0.0.31
 
 RUN --mount=type=cache,target=/tmp/npm-cache \
     T3_DOCKER_KEEP_NPM_CACHE=1 T3_DOCKER_NPM_CACHE_DIR=/tmp/npm-cache T3_DOCKER_INSTALL_TARGET=t3 T3_VERSION="${T3_VERSION}" /opt/t3-docker/install-provider-clis.sh \

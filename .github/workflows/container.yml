@@ -36,7 +36,7 @@ concurrency:
 
 env:
   REGISTRY: ghcr.io
-  T3_VERSION: 0.0.28
+  T3_VERSION: 0.0.31
 
 jobs:
   build:

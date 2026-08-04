@@ -164,6 +164,7 @@ COPY --chown=t3:t3 scripts/provision-harness-instructions.py /opt/t3-docker/prov
 COPY --chown=t3:t3 scripts/configure-codex-mcp.py /opt/t3-docker/configure-codex-mcp.py
 COPY --chown=t3:t3 scripts/configure-cursor-mcp.mjs /opt/t3-docker/configure-cursor-mcp.mjs
 COPY --chown=t3:t3 scripts/cursor-sandbox-wrapper.mjs /opt/t3-docker/cursor-sandbox-wrapper.mjs
+COPY --chown=t3:t3 scripts/claude-launcher.sh /opt/t3-docker/claude-launcher.sh
 COPY --chown=t3:t3 scripts/t3-sandbox-mcp.mjs /opt/t3-docker/t3-sandbox-mcp.mjs
 COPY --chown=t3:t3 scripts/t3-github-mcp.mjs /opt/t3-docker/t3-github-mcp.mjs
 COPY --chown=t3:t3 scripts/t3-xcode-mcp.mjs /opt/t3-docker/t3-xcode-mcp.mjs
@@ -177,7 +178,9 @@ COPY --chown=t3:t3 scripts/issue-worker-entrypoint.sh /opt/t3-docker/issue-worke
 COPY --chown=t3:t3 scripts/t3-sandbox-instructions.md /opt/t3-docker/t3-sandbox-instructions.md
 COPY --chown=t3:t3 scripts/t3-sandbox-only-plugin.js /opt/t3-docker/t3-sandbox-only-plugin.js
 
-RUN chmod +x /opt/t3-docker/render-config.py /opt/t3-docker/entrypoint.sh /opt/t3-docker/healthcheck.sh /opt/t3-docker/auth-proxy.mjs /opt/t3-docker/harness-auth.sh /opt/t3-docker/provision-opencode-mcp.mjs /opt/t3-docker/provision-harness-mcp.sh /opt/t3-docker/provision-harness-instructions.py /opt/t3-docker/configure-codex-mcp.py /opt/t3-docker/configure-cursor-mcp.mjs /opt/t3-docker/t3-sandbox-mcp.mjs /opt/t3-docker/t3-github-mcp.mjs /opt/t3-docker/t3-xcode-mcp.mjs /opt/t3-docker/t3-xcode-auth.sh /opt/t3-docker/t3-doctor.sh /opt/t3-docker/github-issue-worker.mjs /opt/t3-docker/github-git-askpass.sh /opt/t3-docker/issue-worker-entrypoint.sh \
+RUN chmod +x /opt/t3-docker/render-config.py /opt/t3-docker/entrypoint.sh /opt/t3-docker/healthcheck.sh /opt/t3-docker/auth-proxy.mjs /opt/t3-docker/harness-auth.sh /opt/t3-docker/provision-opencode-mcp.mjs /opt/t3-docker/provision-harness-mcp.sh /opt/t3-docker/provision-harness-instructions.py /opt/t3-docker/configure-codex-mcp.py /opt/t3-docker/configure-cursor-mcp.mjs /opt/t3-docker/claude-launcher.sh /opt/t3-docker/t3-sandbox-mcp.mjs /opt/t3-docker/t3-github-mcp.mjs /opt/t3-docker/t3-xcode-mcp.mjs /opt/t3-docker/t3-xcode-auth.sh /opt/t3-docker/t3-doctor.sh /opt/t3-docker/github-issue-worker.mjs /opt/t3-docker/github-git-askpass.sh /opt/t3-docker/issue-worker-entrypoint.sh \
+    && mkdir -p /opt/t3-docker/runtime-bin \
+    && ln -s /opt/t3-docker/claude-launcher.sh /opt/t3-docker/runtime-bin/claude \
     && ln -s /opt/t3-docker/harness-auth.sh /usr/local/bin/t3-auth \
     && ln -s /opt/t3-docker/t3-sandbox-mcp.mjs /usr/local/bin/t3-sandbox-mcp \
     && ln -s /opt/t3-docker/t3-github-mcp.mjs /usr/local/bin/t3-github-mcp \

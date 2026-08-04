@@ -65,8 +65,10 @@ test("keeps the repository T3 pin synchronized", () => {
 });
 
 test("installs and validates Claude Code's platform-native optional binary", () => {
+  const dockerfile = read("Dockerfile");
   const installer = read("scripts/install-provider-clis.sh");
   const entrypoint = read("scripts/entrypoint.sh");
+  const launcher = read("scripts/claude-launcher.sh");
 
   assert.match(installer, /--include=optional/);
   assert.match(
@@ -80,6 +82,10 @@ test("installs and validates Claude Code's platform-native optional binary", () 
     entrypoint,
     /"@anthropic-ai\/claude-code" "Claude Code" "claude" "install\.cjs"/,
   );
+  assert.match(dockerfile, /runtime-bin\/claude/);
+  assert.match(entrypoint, /\/opt\/t3-docker\/runtime-bin:\$NPM_CONFIG_PREFIX\/bin/);
+  assert.match(launcher, /"\$persisted" --version/);
+  assert.match(launcher, /exec "\$bundled" "\$@"/);
 });
 
 test("starts the sandbox MCP from sanitized harness environments", () => {

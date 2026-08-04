@@ -38,7 +38,7 @@ export NPM_CONFIG_PREFIX="${NPM_CONFIG_PREFIX:-/data/npm-global}"
 export npm_config_prefix="$NPM_CONFIG_PREFIX"
 export NPM_CONFIG_CACHE="${NPM_CONFIG_CACHE:-/data/npm-cache}"
 export npm_config_cache="$NPM_CONFIG_CACHE"
-export PATH="$NPM_CONFIG_PREFIX/bin:$HOME/.local/bin:$HOME/.grok/bin:$PATH"
+export PATH="/opt/t3-docker/runtime-bin:$NPM_CONFIG_PREFIX/bin:$HOME/.local/bin:$HOME/.grok/bin:$PATH"
 mkdir -p \
   "$HOME" \
   "$CODEX_HOME" \

@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 import { readFileSync } from "node:fs";
+import http from "node:http";
+import https from "node:https";
 import path from "node:path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
@@ -25,6 +27,37 @@ const lockWorkspace = /^(?:1|true|yes|on)$/i.test(
 );
 const lockedWorkspace = path.resolve(defaultWorkspace);
 const ownedSandboxes = new Set();
+
+function requestGateway(url, options, signal) {
+  return new Promise((resolve, reject) => {
+    const transport = url.protocol === "https:" ? https : http;
+    const request = transport.request(
+      url,
+      {
+        method: options.method || "GET",
+        headers: options.headers,
+        signal,
+      },
+      (response) => {
+        const chunks = [];
+        response.on("data", (chunk) => chunks.push(chunk));
+        response.on("end", () =>
+          resolve({
+            ok:
+              response.statusCode !== undefined &&
+              response.statusCode >= 200 &&
+              response.statusCode < 300,
+            status: response.statusCode,
+            text: () => Promise.resolve(Buffer.concat(chunks).toString("utf8")),
+          }),
+        );
+      },
+    );
+    request.on("error", reject);
+    if (options.body) request.write(options.body);
+    request.end();
+  });
+}
 
 if (!baseUrl || !token) {
   console.error("T3_SANDBOX_URL and T3_SANDBOX_TOKEN are required");
@@ -57,17 +90,16 @@ async function gateway(
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const response = await fetch(`${baseUrl}${path}`, {
+    const response = await requestGateway(new URL(`${baseUrl}${path}`), {
       ...options,
-      signal: externalSignal
-        ? AbortSignal.any([controller.signal, externalSignal])
-        : controller.signal,
       headers: {
         authorization: `Bearer ${token}`,
         "content-type": "application/json",
         ...(options.headers || {}),
       },
-    });
+    }, externalSignal
+      ? AbortSignal.any([controller.signal, externalSignal])
+      : controller.signal);
     const raw = await response.text();
     let body = null;
     if (raw) {

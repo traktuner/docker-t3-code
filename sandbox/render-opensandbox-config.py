@@ -56,6 +56,19 @@ def main() -> None:
     host_root = Path(text("T3_SANDBOX_HOST_WORKSPACE_ROOT", "/workspaces"))
     if not host_root.is_absolute():
         raise SystemExit("T3_SANDBOX_HOST_WORKSPACE_ROOT must be absolute")
+    allowed_host_paths = [str(host_root)]
+    for name in (
+        "T3_SANDBOX_PROTON_PASS_BROKER_HOST_PATH",
+        "T3_SANDBOX_SSH_HOST_PATH",
+    ):
+        raw_path = os.environ.get(name, "").strip()
+        if not raw_path:
+            continue
+        path = Path(raw_path)
+        if not path.is_absolute():
+            raise SystemExit(f"{name} must be absolute when configured")
+        if str(path) not in allowed_host_paths:
+            allowed_host_paths.append(str(path))
 
     port_min = integer("T3_SANDBOX_PORT_RANGE_MIN", 40000, 1024)
     port_max = integer("T3_SANDBOX_PORT_RANGE_MAX", 40200, 1024)
@@ -77,7 +90,9 @@ def main() -> None:
     replacements = {
         "@@MAX_TTL_SECONDS@@": str(integer("T3_SANDBOX_MAX_TTL_SECONDS", 28800, 60)),
         "@@EXECD_IMAGE@@": json.dumps(text("T3_SANDBOX_EXECD_IMAGE", "opensandbox/execd:v1.0.20")),
-        "@@HOST_WORKSPACE_ROOT@@": json.dumps(str(host_root)),
+        "@@ALLOWED_HOST_PATHS@@": ", ".join(
+            json.dumps(path) for path in allowed_host_paths
+        ),
         "@@RUNTIME_NETWORK@@": json.dumps(runtime_network),
         "@@DOCKER_HOST_IP_CONFIG@@": docker_host_ip_config(runtime_network),
         "@@PORT_RANGE_MIN@@": str(port_min),

@@ -33,6 +33,9 @@ class SandboxStateError(RuntimeError):
     pass
 
 
+EXECUTION_TTL_SAFETY_SECONDS = 60
+
+
 class LifecycleError(RuntimeError):
     pass
 
@@ -165,10 +168,26 @@ class SandboxService:
             raise ValueError(
                 f"timeout_seconds cannot exceed {self.settings.command_timeout_seconds}"
             )
+        working_directory = sandbox_working_directory(
+            request.working_directory, lease.workspace
+        )
+        activity_ttl = max(
+            self.settings.default_ttl_seconds,
+            timeout + EXECUTION_TTL_SAFETY_SECONDS,
+        )
+        if activity_ttl > self.settings.max_ttl_seconds:
+            raise ValueError(
+                "sandbox maximum TTL must cover the command timeout plus "
+                f"{EXECUTION_TTL_SAFETY_SECONDS}s safety margin"
+            )
+        await self.backend.renew(lease.upstream_id or "", activity_ttl)
+        lease = self.store.renew(
+            lease.id, datetime.now(UTC) + timedelta(seconds=activity_ttl)
+        )
         return await self.backend.execute(
             lease.upstream_id or "",
             request.command,
-            sandbox_working_directory(request.working_directory, lease.workspace),
+            working_directory,
             timeout,
         )
 
@@ -280,6 +299,10 @@ class SandboxService:
             "GRADLE_USER_HOME": f"{root}/gradle",
             "MAVEN_CONFIG": f"{root}/maven",
         }
+        if self.settings.proton_pass_broker_host_path is not None:
+            managed["PROTON_PASS_BROKER_SOCKET"] = "/run/proton-pass/broker.sock"
+        if self.settings.ssh_host_path is not None:
+            managed["ANSIBLE_PRIVATE_KEY_FILE"] = "/home/agent/.ssh/semaphore_ed25519"
         return {**plan.environment, **managed}
 
     async def _run_lifecycle(

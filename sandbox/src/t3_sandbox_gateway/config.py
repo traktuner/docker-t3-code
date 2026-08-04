@@ -45,6 +45,16 @@ def _required(name: str, file_name: str | None = None) -> str:
     raise RuntimeError(f"{name}{suffix} is required")
 
 
+def _optional_absolute_path(name: str) -> Path | None:
+    value = os.environ.get(name, "").strip()
+    if not value:
+        return None
+    path = Path(value)
+    if not path.is_absolute():
+        raise RuntimeError(f"{name} must be absolute when configured")
+    return path
+
+
 @dataclass(frozen=True, slots=True)
 class Settings:
     gateway_token: str
@@ -55,6 +65,8 @@ class Settings:
     state_db: Path
     base_image: str
     cache_volume: str
+    proton_pass_broker_host_path: Path | None
+    ssh_host_path: Path | None
     devcontainer_user_data: Path
     devcontainer_enabled: bool
     devcontainer_feature_prefixes: tuple[str, ...]
@@ -118,6 +130,10 @@ class Settings:
             cache_volume=os.environ.get(
                 "T3_SANDBOX_CACHE_VOLUME", "t3-sandbox-agent-cache"
             ).strip(),
+            proton_pass_broker_host_path=_optional_absolute_path(
+                "T3_SANDBOX_PROTON_PASS_BROKER_HOST_PATH"
+            ),
+            ssh_host_path=_optional_absolute_path("T3_SANDBOX_SSH_HOST_PATH"),
             devcontainer_user_data=Path(
                 os.environ.get("T3_SANDBOX_DEVCONTAINER_USER_DATA", "/data/devcontainers")
             ),

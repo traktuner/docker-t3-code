@@ -141,8 +141,9 @@ Claude, Cursor, and Grok when each harness is enabled. The tools are:
 - `sandbox_destroy`
 
 An agent should create or reuse a sandbox before a build or tool-heavy task,
-run commands there, and destroy it when finished. Expired leases are also
-removed by OpenSandbox.
+run commands there, and destroy it when finished. Every accepted command resets
+the lease to at least the default idle lifetime before execution; status and
+list calls do not count as activity. Unused leases are removed by OpenSandbox.
 
 When `T3_HARNESS_SANDBOX_INSTRUCTIONS=1`, the main container adds this lifecycle
 as a managed native global rule for OpenCode, Codex, Claude, and Grok. Cursor's
@@ -165,9 +166,11 @@ Important gateway variables:
 | `T3_SANDBOX_HOST_WORKSPACE_ROOT` | `/workspaces` | Canonical host workspace root |
 | `T3_SANDBOX_CLIENT_WORKSPACE_ROOT` | `/workspace` | Matching path visible to T3 |
 | `T3_SANDBOX_BASE_IMAGE` | `...:agent-base` | Default worker image |
+| `T3_SANDBOX_PROTON_PASS_BROKER_HOST_PATH` | empty | Optional host directory containing the T3 broker socket, mounted read-only at `/run/proton-pass` in each worker |
+| `T3_SANDBOX_SSH_HOST_PATH` | empty | Optional host SSH directory, mounted read-only at `/home/agent/.ssh` in each worker |
 | `T3_SANDBOX_MAX_CONCURRENT` | `4` | Global active lease limit |
-| `T3_SANDBOX_DEFAULT_TTL_SECONDS` | `7200` | Default worker lifetime |
-| `T3_SANDBOX_MAX_TTL_SECONDS` | `28800` | Maximum worker lifetime |
+| `T3_SANDBOX_DEFAULT_TTL_SECONDS` | `7200` | Idle lifetime reset when a command starts |
+| `T3_SANDBOX_MAX_TTL_SECONDS` | `28800` | Maximum lifetime accepted per renewal |
 | `T3_SANDBOX_MAX_COMMAND_SECONDS` | `1800` | Maximum command runtime |
 | `T3_SANDBOX_MAX_OUTPUT_BYTES` | `262144` | Maximum returned bytes per output stream |
 | `T3_SANDBOX_CPU_LIMIT` | `4` | CPU limit per worker |

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -20,6 +21,7 @@ class FakeBackend:
         self.create_requests: list[dict] = []
         self.destroyed: list[str] = []
         self.renewed: list[tuple[str, int]] = []
+        self.events: list[tuple[str, str, int | str]] = []
 
     async def create(self, **kwargs) -> str:
         self.created += 1
@@ -29,6 +31,7 @@ class FakeBackend:
     async def execute(
         self, upstream_id, command, working_directory, timeout_seconds
     ) -> BackendExecution:
+        self.events.append(("execute", upstream_id, timeout_seconds))
         return BackendExecution(
             exit_code=0,
             stdout=f"{upstream_id}:{working_directory}:{command}",
@@ -40,6 +43,7 @@ class FakeBackend:
 
     async def renew(self, upstream_id, ttl_seconds) -> None:
         self.renewed.append((upstream_id, ttl_seconds))
+        self.events.append(("renew", upstream_id, ttl_seconds))
 
     async def destroy(self, upstream_id) -> None:
         self.destroyed.append(upstream_id)
@@ -88,6 +92,8 @@ def settings(tmp_path: Path) -> Settings:
         state_db=tmp_path / "state.db",
         base_image="agent-base:test",
         cache_volume="cache",
+        proton_pass_broker_host_path=None,
+        ssh_host_path=None,
         devcontainer_user_data=tmp_path / "devcontainers",
         devcontainer_enabled=True,
         devcontainer_feature_prefixes=("ghcr.io/devcontainers/features/",),
@@ -253,8 +259,10 @@ async def test_reuse_recovers_unavailable_sandbox(tmp_path: Path):
 @pytest.mark.asyncio
 async def test_executes_only_inside_workspace(tmp_path: Path):
     (tmp_path / "repo").mkdir()
-    subject, _backend = service(tmp_path)
+    subject, backend = service(tmp_path)
     lease = await subject.create(CreateSandboxRequest(workspace="/workspace/repo"))
+    original_expiry = lease.expires_at
+    backend.events.clear()
 
     result = await subject.execute(
         lease.id,
@@ -262,6 +270,83 @@ async def test_executes_only_inside_workspace(tmp_path: Path):
     )
 
     assert "/workspace/repo/packages/app:git status" in result.stdout
+    assert backend.events == [
+        ("renew", "upstream-1", 600),
+        ("execute", "upstream-1", 60),
+    ]
+    assert subject.store.get(lease.id).expires_at > original_expiry
+
+
+@pytest.mark.asyncio
+async def test_execution_lease_covers_long_command_plus_safety_margin(tmp_path: Path):
+    (tmp_path / "repo").mkdir()
+    backend = FakeBackend()
+    config = replace(
+        settings(tmp_path),
+        default_ttl_seconds=60,
+        command_timeout_seconds=300,
+    )
+    subject = SandboxService(
+        settings=config,
+        store=LeaseStore(config.state_db),
+        mapper=WorkspaceMapper("/workspace", tmp_path),
+        backend=backend,
+        devcontainers=FakeDevContainers(),
+    )
+    lease = await subject.create(CreateSandboxRequest(workspace="/workspace/repo"))
+    backend.events.clear()
+
+    await subject.execute(
+        lease.id,
+        ExecuteRequest(command="make all", timeout_seconds=300),
+    )
+
+    assert backend.events == [
+        ("renew", "upstream-1", 360),
+        ("execute", "upstream-1", 300),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_execution_rejects_ttl_too_short_for_command(tmp_path: Path):
+    (tmp_path / "repo").mkdir()
+    backend = FakeBackend()
+    config = replace(
+        settings(tmp_path),
+        default_ttl_seconds=60,
+        max_ttl_seconds=300,
+        command_timeout_seconds=300,
+    )
+    subject = SandboxService(
+        settings=config,
+        store=LeaseStore(config.state_db),
+        mapper=WorkspaceMapper("/workspace", tmp_path),
+        backend=backend,
+        devcontainers=FakeDevContainers(),
+    )
+    lease = await subject.create(CreateSandboxRequest(workspace="/workspace/repo"))
+    backend.events.clear()
+
+    with pytest.raises(ValueError, match="maximum TTL must cover"):
+        await subject.execute(
+            lease.id,
+            ExecuteRequest(command="make all", timeout_seconds=300),
+        )
+
+    assert backend.events == []
+
+
+@pytest.mark.asyncio
+async def test_observation_does_not_keep_unused_sandbox_alive(tmp_path: Path):
+    (tmp_path / "repo").mkdir()
+    subject, backend = service(tmp_path)
+    lease = await subject.create(CreateSandboxRequest(workspace="/workspace/repo"))
+    backend.renewed.clear()
+
+    await subject.status(lease.id)
+    subject.list()
+
+    assert backend.renewed == []
 
 
 @pytest.mark.asyncio

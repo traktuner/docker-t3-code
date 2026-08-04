@@ -150,7 +150,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
       ansible \
     && apt-get update \
     && apt-get install -y --no-install-recommends gh \
-    && ln -s /usr/libexec/docker/cli-plugins/docker-compose /usr/local/bin/docker-compose \
+    && ln -sf /usr/libexec/docker/cli-plugins/docker-compose /usr/local/bin/docker-compose \
     && for binary in \
       chromium cwebp dot exiftool ffmpeg ffprobe gh identify mediainfo pandoc \
       pdftoppm qpdf shellcheck shfmt sox tesseract vips Xvfb zbarimg \
@@ -180,7 +180,7 @@ RUN userdel -r node 2>/dev/null || true \
     && chown -R agent:agent /home/agent /workspace \
     && ln -s /usr/bin/fdfind /usr/local/bin/fd \
     && ln -s /usr/bin/batcat /usr/local/bin/bat \
-    && ln -s /usr/libexec/docker/cli-plugins/docker-compose /usr/local/bin/docker-compose \
+    && ln -sf /usr/libexec/docker/cli-plugins/docker-compose /usr/local/bin/docker-compose \
     && git lfs install --system
 
 USER agent

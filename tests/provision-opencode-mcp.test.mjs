@@ -49,3 +49,31 @@ test("provisions global sandbox instructions and strict local-tool permissions i
   assert.equal(parsed.permission["t3-sandbox_*"], "allow");
   assert.equal(parsed.permission["xcodebuild_*"], "allow");
 });
+
+test("provisions the GitHub MCP with an environment reference, never the token value", () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "t3-opencode-github-"));
+  const config = path.join(directory, "opencode.jsonc");
+  fs.writeFileSync(config, JSON.stringify({ "$schema": "https://opencode.ai/config.json" }, null, 2));
+
+  const environment = {
+    ...process.env,
+    T3_OPENCODE_CLOUDFLARE_MCP: "off",
+    T3_OPENCODE_MCP_PRESETS: "github",
+    T3_SANDBOX_MCP_RECONCILE: "0",
+    T3_OPENCODE_SANDBOX_ONLY: "0",
+    GITHUB_PERSONAL_ACCESS_TOKEN: "test-github-token",
+  };
+  execFileSync("node", [provisioner, config], { env: environment });
+
+  const contents = fs.readFileSync(config, "utf8");
+  const parsed = JSON.parse(contents);
+  assert.deepEqual(parsed.mcp.github, {
+    type: "remote",
+    url: "https://api.githubcopilot.com/mcp/",
+    enabled: true,
+    oauth: false,
+    headers: { Authorization: "Bearer {env:GITHUB_PERSONAL_ACCESS_TOKEN}" },
+    timeout: 10000,
+  });
+  assert.doesNotMatch(contents, /test-github-token/);
+});

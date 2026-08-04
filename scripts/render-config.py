@@ -472,7 +472,7 @@ def main():
                 raise SystemExit("providers.opencode.mcp_servers must be a TOML table")
             opencode_mcp_servers_json = json.dumps(configured_mcp_servers, separators=(",", ":"))
     opencode_mcp_presets = str(
-        env_or_cfg("T3_OPENCODE_MCP_PRESETS", opencode_cfg, "mcp_presets", "context7")
+        env_or_cfg("T3_OPENCODE_MCP_PRESETS", opencode_cfg, "mcp_presets", "context7,github")
     )
     opencode_cloudflare_auth = str(
         env_or_cfg("T3_OPENCODE_CLOUDFLARE_AUTH", opencode_cfg, "cloudflare_auth", "auto")

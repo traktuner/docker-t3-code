@@ -328,10 +328,13 @@ The default `1`/`core` profile adds Cloudflare's unified, code-mode API server p
 Lightweight MCP presets can be added without hand-editing OpenCode config:
 
 ```bash
-T3_OPENCODE_MCP_PRESETS=context7
+T3_OPENCODE_MCP_PRESETS=context7,github
 ```
 
 Supported presets are `context7`, `github`, `sentry`, and `grep`. Context7 uses its remote server, avoiding an `npx` install on every OpenCode start, and accepts optional `CONTEXT7_API_KEY`. `github` is only provisioned when `GITHUB_PERSONAL_ACCESS_TOKEN`, `GH_TOKEN`, or `GITHUB_TOKEN` is present, and uses `oauth:false` plus a bearer header. `sentry` uses its local token-backed server when `SENTRY_ACCESS_TOKEN` is present and remote OAuth otherwise.
+
+
+When the GitHub preset is enabled without an environment token, the trusted T3 parent reuses its persisted `t3-auth gh login`; disposable sandbox workers never receive that credential and publish through the parent GitHub MCP.
 
 Additional OpenCode MCP servers can be provisioned generically by environment variable or mounted JSON file. The value can be either the direct `"mcp"` object or an object containing `"mcp"`:
 

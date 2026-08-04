@@ -78,6 +78,29 @@ configure_git_safe_directories() {
   )
 }
 
+hydrate_github_auth_for_opencode() {
+  local presets="${T3_OPENCODE_MCP_PRESETS:-}"
+  local gh_host token
+
+  # Keep provider credentials out of disposable sandbox workers. Only hydrate
+  # the trusted parent process when the GitHub MCP was explicitly requested.
+  presets="${presets//[[:space:]]/}"
+  if [[ ",${presets,,}," != *",github,"* ]]; then
+    return 0
+  fi
+  if [[ -n "${GITHUB_PERSONAL_ACCESS_TOKEN:-}" || -n "${GH_TOKEN:-}" || -n "${GITHUB_TOKEN:-}" ]]; then
+    return 0
+  fi
+  command -v gh >/dev/null 2>&1 || return 0
+
+  gh_host="${GH_HOST:-${GITHUB_HOST:-github.com}}"
+  token="$(gh auth token --hostname "$gh_host" 2>/dev/null || true)"
+  if [[ -n "$token" ]]; then
+    export GITHUB_PERSONAL_ACCESS_TOKEN="$token"
+    echo "Using the persisted gh login for the parent OpenCode GitHub MCP."
+  fi
+}
+
 preserve_opencode_mcp_config() {
   local target_dir="$1"
   local candidate="${T3_OPENCODE_CONFIG:-}"
@@ -519,6 +542,7 @@ run_t3_headless() {
   wait_for_supervised_processes "${supervised_pids[@]}"
 }
 
+hydrate_github_auth_for_opencode
 provision_provider_config_dirs
 if [[ "${T3_AUTO_UPDATE_EFFECTIVE:-1}" == "1" ]]; then
   install_npm_latest "${T3_UPDATE_CODEX:-0}" "@openai/codex" "Codex CLI" "codex"

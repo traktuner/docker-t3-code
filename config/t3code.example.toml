@@ -100,7 +100,7 @@ config_sync_mode = "preserve-mcp"
 # Values: 1/core, docs, all, api, token, off/0.
 cloudflare_mcp = "core"
 cloudflare_auth = "auto"
-mcp_presets = "context7"
+mcp_presets = "context7,github"
 mcp_servers_file = ""
 config_source = ""
 config_path = "/data/home/.config/opencode/opencode.jsonc"

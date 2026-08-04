@@ -76,3 +76,23 @@ test("starts the sandbox MCP from sanitized harness environments", () => {
   assert.match(bridge, /readFileSync\(tokenFile, "utf8"\)\.trim\(\)/);
   assert.match(bridge, /!Array\.isArray\(value\)/);
 });
+
+test("registers the credential-isolated GitHub MCP for every provider harness", () => {
+  const dockerfile = read("Dockerfile");
+  const bridge = read("scripts/t3-github-mcp.mjs");
+  const provisioner = read("scripts/provision-harness-mcp.sh");
+  const cursor = read("scripts/configure-cursor-mcp.mjs");
+  const instructions = read("scripts/t3-sandbox-instructions.md");
+
+  assert.match(dockerfile, /scripts\/t3-github-mcp\.mjs/);
+  assert.match(dockerfile, /usr\/local\/bin\/t3-github-mcp/);
+  assert.match(bridge, /StreamableHTTPClientTransport/);
+  assert.match(bridge, /gh", \["auth", "token"/);
+  assert.doesNotMatch(bridge, /console\.log\(.*token/);
+  for (const provider of ["codex", "claude", "grok"]) {
+    assert.match(provisioner, new RegExp(`${provider} mcp add[^\\n]*github[^\\n]*t3-github-mcp`));
+  }
+  assert.match(cursor, /desired\.github = \{ command: "t3-github-mcp"/);
+  assert.match(instructions, /Use the MCP server named `github`/);
+  assert.match(instructions, /Never run authenticated `gh` commands inside `t3-sandbox`/);
+});

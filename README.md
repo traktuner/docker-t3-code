@@ -334,7 +334,7 @@ T3_OPENCODE_MCP_PRESETS=context7,github
 Supported presets are `context7`, `github`, `sentry`, and `grep`. Context7 uses its remote server, avoiding an `npx` install on every OpenCode start, and accepts optional `CONTEXT7_API_KEY`. `github` is only provisioned when `GITHUB_PERSONAL_ACCESS_TOKEN`, `GH_TOKEN`, or `GITHUB_TOKEN` is present, and uses `oauth:false` plus a bearer header. `sentry` uses its local token-backed server when `SENTRY_ACCESS_TOKEN` is present and remote OAuth otherwise.
 
 
-When the GitHub preset is enabled without an environment token, the trusted T3 parent reuses its persisted `t3-auth gh login`; disposable sandbox workers never receive that credential and publish through the parent GitHub MCP.
+When the GitHub preset is enabled without an environment token, the trusted T3 parent reuses its persisted `t3-auth gh login`. The same local `t3-github-mcp` bridge is registered for OpenCode, Codex, Claude Code, Cursor Agent, and Grok Build. It forwards MCP tool discovery and calls to GitHub's remote MCP while keeping the bearer token in the parent process; disposable sandbox workers never receive that credential. Managed instructions tell every harness to use the `github` MCP instead of authenticated `gh` commands in the sandbox.
 
 Additional OpenCode MCP servers can be provisioned generically by environment variable or mounted JSON file. The value can be either the direct `"mcp"` object or an object containing `"mcp"`:
 

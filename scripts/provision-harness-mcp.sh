@@ -3,11 +3,18 @@ set -Eeuo pipefail
 
 sandbox_enabled=0
 xcode_enabled=0
+github_enabled=0
 [[ -n "${T3_SANDBOX_URL:-}" && -n "${T3_SANDBOX_TOKEN:-}" ]] && sandbox_enabled=1
 [[ -n "${T3_XCODE_SSH_HOST:-}" && -n "${T3_XCODE_REMOTE_WORKSPACE_ROOT:-}" ]] && xcode_enabled=1
+github_presets="${T3_OPENCODE_MCP_PRESETS:-}"
+github_presets="${github_presets//[[:space:]]/}"
+if [[ ",${github_presets,,}," == *",github,"* ]] \
+  && [[ -n "${GITHUB_PERSONAL_ACCESS_TOKEN:-}${GH_TOKEN:-}${GITHUB_TOKEN:-}" ]]; then
+  github_enabled=1
+fi
 reconcile="${T3_HARNESS_MCP_RECONCILE:-${T3_SANDBOX_MCP_RECONCILE:-1}}"
 export T3_SANDBOX_MCP_RECONCILE="$reconcile"
-if [[ "$sandbox_enabled" == "0" && "$xcode_enabled" == "0" && "$reconcile" != "1" ]]; then
+if [[ "$sandbox_enabled" == "0" && "$github_enabled" == "0" && "$xcode_enabled" == "0" && "$reconcile" != "1" ]]; then
   exit 0
 fi
 
@@ -17,7 +24,15 @@ provision_codex() {
 
   if [[ "$reconcile" == "1" ]]; then
     codex mcp remove t3-sandbox >/dev/null 2>&1 || true
+    codex mcp remove github >/dev/null 2>&1 || true
     codex mcp remove xcodebuild >/dev/null 2>&1 || true
+  fi
+
+  if [[ "$github_enabled" == "1" ]]; then
+    if ! codex mcp get github >/dev/null 2>&1 \
+      && ! codex mcp add github -- t3-github-mcp >/dev/null; then
+      echo "Warning: could not register GitHub MCP in Codex." >&2
+    fi
   fi
 
   if [[ "$sandbox_enabled" == "1" ]]; then
@@ -47,7 +62,15 @@ provision_claude() {
   mkdir -p "$claude_home"
   if [[ "$reconcile" == "1" ]]; then
     HOME="$claude_home" claude mcp remove --scope user t3-sandbox >/dev/null 2>&1 || true
+    HOME="$claude_home" claude mcp remove --scope user github >/dev/null 2>&1 || true
     HOME="$claude_home" claude mcp remove --scope user xcodebuild >/dev/null 2>&1 || true
+  fi
+
+  if [[ "$github_enabled" == "1" ]]; then
+    if ! HOME="$claude_home" claude mcp get github >/dev/null 2>&1 \
+      && ! HOME="$claude_home" claude mcp add --scope user github -- t3-github-mcp >/dev/null; then
+      echo "Warning: could not register GitHub MCP in Claude Code." >&2
+    fi
   fi
 
   if [[ "$sandbox_enabled" == "1" ]]; then
@@ -81,7 +104,12 @@ provision_grok() {
   local grok_home="${T3_GROK_HOME_PATH:-/data/home}"
   if [[ "$reconcile" == "1" ]]; then
     HOME="$grok_home" grok mcp remove t3-sandbox >/dev/null 2>&1 || true
+    HOME="$grok_home" grok mcp remove github >/dev/null 2>&1 || true
     HOME="$grok_home" grok mcp remove xcodebuild >/dev/null 2>&1 || true
+  fi
+  if [[ "$github_enabled" == "1" ]] \
+    && ! HOME="$grok_home" grok mcp add github -- t3-github-mcp >/dev/null; then
+    echo "Warning: could not register GitHub MCP in Grok Build." >&2
   fi
 
   if [[ "$sandbox_enabled" == "1" ]] \

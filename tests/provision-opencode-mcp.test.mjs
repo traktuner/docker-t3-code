@@ -50,7 +50,7 @@ test("provisions global sandbox instructions and strict local-tool permissions i
   assert.equal(parsed.permission["xcodebuild_*"], "allow");
 });
 
-test("provisions the GitHub MCP with an environment reference, never the token value", () => {
+test("provisions the parent GitHub MCP bridge, never the token value", () => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "t3-opencode-github-"));
   const config = path.join(directory, "opencode.jsonc");
   fs.writeFileSync(config, JSON.stringify({ "$schema": "https://opencode.ai/config.json" }, null, 2));
@@ -68,12 +68,11 @@ test("provisions the GitHub MCP with an environment reference, never the token v
   const contents = fs.readFileSync(config, "utf8");
   const parsed = JSON.parse(contents);
   assert.deepEqual(parsed.mcp.github, {
-    type: "remote",
-    url: "https://api.githubcopilot.com/mcp/",
+    type: "local",
+    command: ["t3-github-mcp"],
     enabled: true,
-    oauth: false,
-    headers: { Authorization: "Bearer {env:GITHUB_PERSONAL_ACCESS_TOKEN}" },
     timeout: 10000,
   });
+  assert.equal(parsed.permission["github_*"], "allow");
   assert.doesNotMatch(contents, /test-github-token/);
 });

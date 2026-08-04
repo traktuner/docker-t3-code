@@ -66,6 +66,7 @@ test("keeps the repository T3 pin synchronized", () => {
 
 test("installs and validates Claude Code's platform-native optional binary", () => {
   const installer = read("scripts/install-provider-clis.sh");
+  const entrypoint = read("scripts/entrypoint.sh");
 
   assert.match(installer, /--include=optional/);
   assert.match(
@@ -73,6 +74,12 @@ test("installs and validates Claude Code's platform-native optional binary", () 
     /node \/usr\/local\/lib\/node_modules\/@anthropic-ai\/claude-code\/install\.cjs/,
   );
   assert.match(installer, /claude --version >\/dev\/null/);
+  assert.match(entrypoint, /Repairing unusable \$label package at current version/);
+  assert.match(entrypoint, /npm_args\+=\(--include=optional\)/);
+  assert.match(
+    entrypoint,
+    /"@anthropic-ai\/claude-code" "Claude Code" "claude" "install\.cjs"/,
+  );
 });
 
 test("starts the sandbox MCP from sanitized harness environments", () => {

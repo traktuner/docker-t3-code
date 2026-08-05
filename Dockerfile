@@ -147,7 +147,7 @@ RUN bun_installer="$(mktemp)" \
       [ ! -e "$bin" ] || chmod +x "$bin"; \
     done
 
-ARG T3_VERSION=0.0.31
+ARG T3_VERSION=0.0.28
 
 RUN --mount=type=cache,target=/tmp/npm-cache \
     T3_DOCKER_KEEP_NPM_CACHE=1 T3_DOCKER_NPM_CACHE_DIR=/tmp/npm-cache T3_DOCKER_INSTALL_TARGET=t3 T3_VERSION="${T3_VERSION}" /opt/t3-docker/install-provider-clis.sh \
@@ -164,9 +164,7 @@ COPY --chown=t3:t3 scripts/provision-harness-instructions.py /opt/t3-docker/prov
 COPY --chown=t3:t3 scripts/configure-codex-mcp.py /opt/t3-docker/configure-codex-mcp.py
 COPY --chown=t3:t3 scripts/configure-cursor-mcp.mjs /opt/t3-docker/configure-cursor-mcp.mjs
 COPY --chown=t3:t3 scripts/cursor-sandbox-wrapper.mjs /opt/t3-docker/cursor-sandbox-wrapper.mjs
-COPY --chown=t3:t3 scripts/claude-launcher.sh /opt/t3-docker/claude-launcher.sh
 COPY --chown=t3:t3 scripts/t3-sandbox-mcp.mjs /opt/t3-docker/t3-sandbox-mcp.mjs
-COPY --chown=t3:t3 scripts/t3-github-mcp.mjs /opt/t3-docker/t3-github-mcp.mjs
 COPY --chown=t3:t3 scripts/t3-xcode-mcp.mjs /opt/t3-docker/t3-xcode-mcp.mjs
 COPY --chown=t3:t3 scripts/t3-xcode-auth.sh /opt/t3-docker/t3-xcode-auth.sh
 COPY --chown=t3:t3 scripts/t3-doctor.sh /opt/t3-docker/t3-doctor.sh
@@ -178,12 +176,9 @@ COPY --chown=t3:t3 scripts/issue-worker-entrypoint.sh /opt/t3-docker/issue-worke
 COPY --chown=t3:t3 scripts/t3-sandbox-instructions.md /opt/t3-docker/t3-sandbox-instructions.md
 COPY --chown=t3:t3 scripts/t3-sandbox-only-plugin.js /opt/t3-docker/t3-sandbox-only-plugin.js
 
-RUN chmod +x /opt/t3-docker/render-config.py /opt/t3-docker/entrypoint.sh /opt/t3-docker/healthcheck.sh /opt/t3-docker/auth-proxy.mjs /opt/t3-docker/harness-auth.sh /opt/t3-docker/provision-opencode-mcp.mjs /opt/t3-docker/provision-harness-mcp.sh /opt/t3-docker/provision-harness-instructions.py /opt/t3-docker/configure-codex-mcp.py /opt/t3-docker/configure-cursor-mcp.mjs /opt/t3-docker/claude-launcher.sh /opt/t3-docker/t3-sandbox-mcp.mjs /opt/t3-docker/t3-github-mcp.mjs /opt/t3-docker/t3-xcode-mcp.mjs /opt/t3-docker/t3-xcode-auth.sh /opt/t3-docker/t3-doctor.sh /opt/t3-docker/github-issue-worker.mjs /opt/t3-docker/github-git-askpass.sh /opt/t3-docker/issue-worker-entrypoint.sh \
-    && mkdir -p /opt/t3-docker/runtime-bin \
-    && ln -s /opt/t3-docker/claude-launcher.sh /opt/t3-docker/runtime-bin/claude \
+RUN chmod +x /opt/t3-docker/render-config.py /opt/t3-docker/entrypoint.sh /opt/t3-docker/healthcheck.sh /opt/t3-docker/auth-proxy.mjs /opt/t3-docker/harness-auth.sh /opt/t3-docker/provision-opencode-mcp.mjs /opt/t3-docker/provision-harness-mcp.sh /opt/t3-docker/provision-harness-instructions.py /opt/t3-docker/configure-codex-mcp.py /opt/t3-docker/configure-cursor-mcp.mjs /opt/t3-docker/t3-sandbox-mcp.mjs /opt/t3-docker/t3-xcode-mcp.mjs /opt/t3-docker/t3-xcode-auth.sh /opt/t3-docker/t3-doctor.sh /opt/t3-docker/github-issue-worker.mjs /opt/t3-docker/github-git-askpass.sh /opt/t3-docker/issue-worker-entrypoint.sh \
     && ln -s /opt/t3-docker/harness-auth.sh /usr/local/bin/t3-auth \
     && ln -s /opt/t3-docker/t3-sandbox-mcp.mjs /usr/local/bin/t3-sandbox-mcp \
-    && ln -s /opt/t3-docker/t3-github-mcp.mjs /usr/local/bin/t3-github-mcp \
     && ln -s /opt/t3-docker/t3-xcode-mcp.mjs /usr/local/bin/t3-xcode-mcp \
     && ln -s /opt/t3-docker/t3-xcode-auth.sh /usr/local/bin/t3-xcode-auth \
     && ln -s /opt/t3-docker/t3-doctor.sh /usr/local/bin/t3-doctor \

@@ -12,7 +12,7 @@ test("pins the official T3 CLI and optionally wraps only its browser auth bounda
   const entrypoint = read("scripts/entrypoint.sh");
   const doctor = read("scripts/t3-doctor.sh");
 
-  assert.match(dockerfile, /^ARG T3_VERSION=0\.0\.31$/m);
+  assert.match(dockerfile, /^ARG T3_VERSION=0\.0\.28$/m);
   assert.match(dockerfile, /^EXPOSE 3773$/m);
   assert.match(dockerfile, /scripts\/auth-proxy\.mjs/);
   assert.doesNotMatch(dockerfile, /mcp-auth-helper|EXPOSE[^\n]*13774/);
@@ -57,35 +57,9 @@ test("keeps T3 state, provider homes, and workspace as separate mounts", () => {
 });
 
 test("keeps the repository T3 pin synchronized", () => {
-  assert.match(read(".env.example"), /^T3_VERSION=0\.0\.31$/m);
-  assert.match(read(".github/workflows/container.yml"), /^\s+T3_VERSION: 0\.0\.31$/m);
-  assert.match(read("docker-compose.yml"), /T3_VERSION:-0\.0\.31/);
-  assert.match(read("docker-compose.example.yml"), /T3_VERSION:-0\.0\.31/);
+  assert.match(read(".env.example"), /^T3_VERSION=0\.0\.28$/m);
+  assert.match(read(".github/workflows/container.yml"), /^\s+T3_VERSION: 0\.0\.28$/m);
   assert.doesNotMatch(read("config/t3code.example.toml"), /^\[auth\]$/m);
-});
-
-test("installs and validates Claude Code's platform-native optional binary", () => {
-  const dockerfile = read("Dockerfile");
-  const installer = read("scripts/install-provider-clis.sh");
-  const entrypoint = read("scripts/entrypoint.sh");
-  const launcher = read("scripts/claude-launcher.sh");
-
-  assert.match(installer, /--include=optional/);
-  assert.match(
-    installer,
-    /node \/usr\/local\/lib\/node_modules\/@anthropic-ai\/claude-code\/install\.cjs/,
-  );
-  assert.match(installer, /claude --version >\/dev\/null/);
-  assert.match(entrypoint, /Repairing unusable \$label package at current version/);
-  assert.match(entrypoint, /npm_args\+=\(--include=optional\)/);
-  assert.match(
-    entrypoint,
-    /"@anthropic-ai\/claude-code" "Claude Code" "claude" "install\.cjs"/,
-  );
-  assert.match(dockerfile, /runtime-bin\/claude/);
-  assert.match(entrypoint, /\/opt\/t3-docker\/runtime-bin:\$NPM_CONFIG_PREFIX\/bin/);
-  assert.match(launcher, /"\$persisted" --version/);
-  assert.match(launcher, /exec "\$bundled" "\$@"/);
 });
 
 test("starts the sandbox MCP from sanitized harness environments", () => {
@@ -101,24 +75,4 @@ test("starts the sandbox MCP from sanitized harness environments", () => {
   );
   assert.match(bridge, /readFileSync\(tokenFile, "utf8"\)\.trim\(\)/);
   assert.match(bridge, /!Array\.isArray\(value\)/);
-});
-
-test("registers the credential-isolated GitHub MCP for every provider harness", () => {
-  const dockerfile = read("Dockerfile");
-  const bridge = read("scripts/t3-github-mcp.mjs");
-  const provisioner = read("scripts/provision-harness-mcp.sh");
-  const cursor = read("scripts/configure-cursor-mcp.mjs");
-  const instructions = read("scripts/t3-sandbox-instructions.md");
-
-  assert.match(dockerfile, /scripts\/t3-github-mcp\.mjs/);
-  assert.match(dockerfile, /usr\/local\/bin\/t3-github-mcp/);
-  assert.match(bridge, /StreamableHTTPClientTransport/);
-  assert.match(bridge, /gh", \["auth", "token"/);
-  assert.doesNotMatch(bridge, /console\.log\(.*token/);
-  for (const provider of ["codex", "claude", "grok"]) {
-    assert.match(provisioner, new RegExp(`${provider} mcp add[^\\n]*github[^\\n]*t3-github-mcp`));
-  }
-  assert.match(cursor, /desired\.github = \{ command: "t3-github-mcp"/);
-  assert.match(instructions, /Use the MCP server named `github`/);
-  assert.match(instructions, /Never run authenticated `gh` commands inside `t3-sandbox`/);
 });

@@ -30,17 +30,8 @@ install_t3_cli() {
 install_npm_provider_clis() {
   install_npm_packages \
     "@openai/codex@${CODEX_VERSION:-latest}" \
+    "@anthropic-ai/claude-code@${CLAUDE_VERSION:-latest}" \
     "opencode-ai@${OPENCODE_VERSION:-latest}"
-
-  # Claude Code 2.x is a small wrapper around a platform-native optional
-  # dependency. Install it separately so npm cannot omit that dependency while
-  # resolving the other global CLIs, then run the package's installer and prove
-  # the native binary is usable before publishing the image.
-  install_npm_packages \
-    --include=optional \
-    "@anthropic-ai/claude-code@${CLAUDE_VERSION:-latest}"
-  node /usr/local/lib/node_modules/@anthropic-ai/claude-code/install.cjs
-  claude --version >/dev/null
 }
 
 verify_installer() {

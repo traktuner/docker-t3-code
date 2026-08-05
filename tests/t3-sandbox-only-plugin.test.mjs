@@ -45,6 +45,16 @@ test("marks blocked local tool definitions as unavailable before the model sees 
   assert.match(output.description, /unavailable.*sandbox-backed bash/i);
 });
 
+test("directs unavailable patch helpers to the sandbox patch tool", async () => {
+  const hooks = await pluginModule.T3SandboxOnly();
+  for (const tool of ["apply_patch", "patch"]) {
+    await assert.rejects(
+      hooks["tool.execute.before"]({ tool }, { args: {} }),
+      /t3-sandbox_sandbox_apply_patch.*git apply --check/i,
+    );
+  }
+});
+
 test("routes bash into one reused sandbox per OpenCode session", async () => {
   const originalFetch = globalThis.fetch;
   const originalUrl = process.env.T3_SANDBOX_URL;

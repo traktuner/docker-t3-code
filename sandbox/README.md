@@ -135,6 +135,7 @@ Claude, Cursor, and Grok when each harness is enabled. The tools are:
 
 - `sandbox_create`
 - `sandbox_exec`
+- `sandbox_apply_patch`
 - `sandbox_status`
 - `sandbox_list`
 - `sandbox_renew`

@@ -8,7 +8,7 @@ if (!configPath) {
   process.exit(2);
 }
 const reconcileManaged = (process.env.T3_SANDBOX_MCP_RECONCILE || "1") === "1";
-const managedMcpNames = ["t3-sandbox", "github", "xcodebuild"];
+const managedMcpNames = ["t3-sandbox", "xcodebuild"];
 const sandboxInstructionsFile = (
   process.env.T3_OPENCODE_SANDBOX_INSTRUCTIONS_FILE || ""
 ).trim();
@@ -178,9 +178,13 @@ function githubPreset() {
   if (!tokenEnv) return {};
   return {
     github: {
-      type: "local",
-      command: ["t3-github-mcp"],
+      type: "remote",
+      url: "https://api.githubcopilot.com/mcp/",
       enabled: true,
+      oauth: false,
+      headers: {
+        Authorization: `Bearer {env:${tokenEnv}}`,
+      },
       timeout: 10000,
     },
   };
@@ -360,11 +364,9 @@ function desiredMcpServers() {
   if (reconcileManaged) {
     for (const name of managedMcpNames) desired.delete(name);
     addObjectEntries(desired, sandboxPreset());
-    addObjectEntries(desired, githubPreset());
     addObjectEntries(desired, xcodePreset());
   } else {
     addMissingEntries(desired, sandboxPreset());
-    addMissingEntries(desired, githubPreset());
     addMissingEntries(desired, xcodePreset());
   }
 
@@ -672,14 +674,9 @@ function reconcileManagedEntries(input, desired) {
       name,
     );
     if (!property) return [];
-    const command = {
-      "t3-sandbox": "t3-sandbox-mcp",
-      github: "t3-github-mcp",
-      xcodebuild: "t3-xcode-mcp",
-    }[name];
     const value = desired.get(name) || {
       type: "local",
-      command: [command],
+      command: [name === "t3-sandbox" ? "t3-sandbox-mcp" : "t3-xcode-mcp"],
       enabled: false,
     };
     return [{ ...property, value: renderEntryValue(value) }];
@@ -729,9 +726,6 @@ if (sandboxOnly) {
       ["xcodebuild_*", "allow"],
     ]),
   );
-}
-if (desired.has("github")) {
-  after = upsertObjectEntries(after, "permission", new Map([["github_*", "allow"]]));
 }
 if (after !== before) {
   const temporary = path.join(path.dirname(configPath), `.${path.basename(configPath)}.${process.pid}.tmp`);

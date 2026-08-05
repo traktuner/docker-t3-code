@@ -38,7 +38,7 @@ export NPM_CONFIG_PREFIX="${NPM_CONFIG_PREFIX:-/data/npm-global}"
 export npm_config_prefix="$NPM_CONFIG_PREFIX"
 export NPM_CONFIG_CACHE="${NPM_CONFIG_CACHE:-/data/npm-cache}"
 export npm_config_cache="$NPM_CONFIG_CACHE"
-export PATH="/opt/t3-docker/runtime-bin:$NPM_CONFIG_PREFIX/bin:$HOME/.local/bin:$HOME/.grok/bin:$PATH"
+export PATH="$NPM_CONFIG_PREFIX/bin:$HOME/.local/bin:$HOME/.grok/bin:$PATH"
 mkdir -p \
   "$HOME" \
   "$CODEX_HOME" \
@@ -78,12 +78,12 @@ configure_git_safe_directories() {
   )
 }
 
-hydrate_github_auth_for_harnesses() {
+hydrate_github_auth_for_opencode() {
   local presets="${T3_OPENCODE_MCP_PRESETS:-}"
   local gh_host token
 
   # Keep provider credentials out of disposable sandbox workers. Only hydrate
-  # the trusted parent process when the shared GitHub MCP was requested.
+  # the trusted parent process when the GitHub MCP was explicitly requested.
   presets="${presets//[[:space:]]/}"
   if [[ ",${presets,,}," != *",github,"* ]]; then
     return 0
@@ -335,7 +335,6 @@ install_npm_latest() {
   local package_name="$2"
   local label="$3"
   local binary_name="${4:-}"
-  local postinstall_script="${5:-}"
 
   if [[ "$enabled" != "1" ]]; then
     return 0
@@ -363,28 +362,17 @@ install_npm_latest() {
   fi
 
   if [[ "$current_version" == "$latest_version" ]]; then
-    if [[ -z "$binary_name" ]] || "$binary_name" --version >/dev/null 2>&1; then
-      echo "$label is current at $current_version"
-      return 0
-    fi
-    echo "Repairing unusable $label package at current version $current_version"
+    echo "$label is current at $current_version"
+    return 0
   fi
 
   echo "Updating $label package: ${current_version:-not installed} -> $latest_version"
-  local -a npm_args=(-g --no-audit --no-fund --dangerously-allow-all-scripts)
-  [[ -z "$postinstall_script" ]] || npm_args+=(--include=optional)
-  if npm install "${npm_args[@]}" "${package_name}@${latest_version}"; then
-    if [[ -n "$postinstall_script" ]]; then
-      node "$NPM_CONFIG_PREFIX/lib/node_modules/$package_name/$postinstall_script"
-    fi
-    if [[ -n "$binary_name" ]]; then
-      "$binary_name" --version >/dev/null
-    fi
+  if npm install -g --no-audit --no-fund --dangerously-allow-all-scripts "${package_name}@${latest_version}"; then
     return 0
   fi
 
   echo "Warning: failed to update $label package. Falling back to the existing binary if available." >&2
-  if [[ -n "$binary_name" ]] && "$binary_name" --version >/dev/null 2>&1; then
+  if [[ -n "$binary_name" ]] && command -v "$binary_name" >/dev/null 2>&1; then
     echo "Continuing with $label at $(command -v "$binary_name")"
     return 0
   fi
@@ -554,11 +542,11 @@ run_t3_headless() {
   wait_for_supervised_processes "${supervised_pids[@]}"
 }
 
-hydrate_github_auth_for_harnesses
+hydrate_github_auth_for_opencode
 provision_provider_config_dirs
 if [[ "${T3_AUTO_UPDATE_EFFECTIVE:-1}" == "1" ]]; then
   install_npm_latest "${T3_UPDATE_CODEX:-0}" "@openai/codex" "Codex CLI" "codex"
-  install_npm_latest "${T3_UPDATE_CLAUDE:-0}" "@anthropic-ai/claude-code" "Claude Code" "claude" "install.cjs"
+  install_npm_latest "${T3_UPDATE_CLAUDE:-0}" "@anthropic-ai/claude-code" "Claude Code" "claude"
   install_npm_latest "${T3_UPDATE_OPENCODE:-0}" "opencode-ai" "OpenCode" "opencode"
   install_cursor_latest "${T3_UPDATE_CURSOR:-0}"
   install_grok_latest "${T3_UPDATE_GROK:-0}"

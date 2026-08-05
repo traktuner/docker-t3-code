@@ -7,21 +7,12 @@ const configPath =
   process.env.T3_CURSOR_MCP_CONFIG || path.join(os.homedir(), ".cursor", "mcp.json");
 const reconcile = (process.env.T3_SANDBOX_MCP_RECONCILE || "1") === "1";
 const desired = {};
-const githubRequested = `,${(process.env.T3_OPENCODE_MCP_PRESETS || "")
-  .replace(/\s/g, "")
-  .toLowerCase()},`.includes(",github,");
-const githubAuthenticated = ["GITHUB_PERSONAL_ACCESS_TOKEN", "GH_TOKEN", "GITHUB_TOKEN"].some(
-  (name) => (process.env[name] || "").trim(),
-);
 
 if (process.env.T3_SANDBOX_URL && process.env.T3_SANDBOX_TOKEN) {
   desired["t3-sandbox"] = { command: "t3-sandbox-mcp", args: [] };
 }
 if (process.env.T3_XCODE_SSH_HOST && process.env.T3_XCODE_REMOTE_WORKSPACE_ROOT) {
   desired.xcodebuild = { command: "t3-xcode-mcp", args: [] };
-}
-if (githubRequested && githubAuthenticated) {
-  desired.github = { command: "t3-github-mcp", args: [] };
 }
 
 let config = {};
@@ -41,7 +32,6 @@ if (!config.mcpServers || typeof config.mcpServers !== "object") {
 
 if (reconcile) {
   delete config.mcpServers["t3-sandbox"];
-  delete config.mcpServers.github;
   delete config.mcpServers.xcodebuild;
 }
 Object.assign(config.mcpServers, desired);

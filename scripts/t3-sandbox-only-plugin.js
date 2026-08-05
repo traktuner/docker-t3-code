@@ -12,6 +12,16 @@ const blockedLocalTools = new Set([
   "write",
 ]);
 
+function blockedToolGuidance(tool) {
+  if (tool === "apply_patch" || tool === "patch") {
+    return (
+      "Use t3-sandbox_sandbox_apply_patch instead. It validates the unified diff with " +
+      "git apply --check and applies it inside the isolated coding sandbox."
+    );
+  }
+  return "Use the sandbox-backed bash tool or t3-sandbox MCP tools instead.";
+}
+
 class SandboxGatewayError extends Error {
   constructor(status, message) {
     super(message);
@@ -182,13 +192,13 @@ export const T3SandboxOnly = async ({ directory = "/workspace", worktree = "" } 
       if (!blockedLocalTools.has(input.toolID)) return;
       output.description =
         `Local tool '${input.toolID}' is unavailable in this deployment. ` +
-        "Do not call it. Use the sandbox-backed bash tool or t3-sandbox MCP tools instead.";
+        `Do not call it. ${blockedToolGuidance(input.toolID)}`;
     },
     "tool.execute.before": async (input) => {
       if (!blockedLocalTools.has(input.tool)) return;
       throw new Error(
         `Local tool '${input.tool}' is disabled. Do not retry it. Use the sandbox-backed bash ` +
-          "tool or t3-sandbox MCP tools instead.",
+          `tool or t3-sandbox MCP tools instead. ${blockedToolGuidance(input.tool)}`,
       );
     },
   };

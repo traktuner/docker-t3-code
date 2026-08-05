@@ -81,6 +81,17 @@ function requireOwnedSandbox(sandboxId) {
   }
 }
 
+function patchCommand(patch) {
+  const encodedPatch = Buffer.from(patch, "utf8").toString("base64");
+  return [
+    "patch_file=$(mktemp)",
+    "trap 'rm -f \"$patch_file\"' EXIT",
+    `printf '%s' '${encodedPatch}' | base64 --decode > "$patch_file"`,
+    'git apply --check --whitespace=nowarn "$patch_file"',
+    'git apply --whitespace=nowarn "$patch_file"',
+  ].join("\n");
+}
+
 async function gateway(
   path,
   options = {},
@@ -276,6 +287,53 @@ server.registerTool(
               timeoutMs,
               extra.signal,
             ),
+        ),
+      );
+    } catch (error) {
+      return failure(error);
+    }
+  },
+);
+
+server.registerTool(
+  "sandbox_apply_patch",
+  {
+    title: "Apply a unified diff in coding sandbox",
+    description:
+      "Validate and apply a unified text diff entirely inside an active coding sandbox. " +
+      "The patch is checked with git apply before any workspace file is changed.",
+    inputSchema: {
+      sandbox_id: z.string().uuid(),
+      patch: z.string().min(1).describe("Unified diff to validate and apply"),
+      working_directory: z.string().default("/workspace"),
+      timeout_seconds: z.number().int().min(1).optional(),
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+  },
+  async ({ sandbox_id, patch, working_directory, timeout_seconds }, extra) => {
+    try {
+      requireOwnedSandbox(sandbox_id);
+      const timeoutMs = (timeout_seconds || 1800) * 1000 + 30_000;
+      return result(
+        await withProgress(extra, "Applying patch in the coding sandbox", () =>
+          gateway(
+            `/v1/sandboxes/${encodeURIComponent(sandbox_id)}/exec`,
+            {
+              method: "POST",
+              body: JSON.stringify({
+                command: patchCommand(patch),
+                working_directory,
+                timeout_seconds,
+              }),
+            },
+            timeoutMs,
+            extra.signal,
+          ),
         ),
       );
     } catch (error) {

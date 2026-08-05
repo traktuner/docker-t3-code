@@ -20,8 +20,10 @@ For every repository task:
 3. Perform ALL filesystem inspection, edits, package installation, Git
    commands, builds, tests, media processing, and diagnostics through
    `sandbox_exec` using the returned sandbox ID or through the explicitly
-   sandbox-backed `bash` alias. Repository changes persist through the mounted
-   workspace.
+   sandbox-backed `bash` alias. For a unified text diff, use
+   `sandbox_apply_patch`; it runs `git apply --check` before applying the
+   patch inside the mounted workspace. Repository changes persist through the
+   mounted workspace.
 4. Install missing task-specific tools inside the sandbox. Do not install them
    into the T3 container.
 5. Use the `xcodebuild` MCP tools for Apple/Xcode operations. Linux sandboxes
@@ -39,16 +41,6 @@ For every repository task:
 Remote MCP servers may still be used for their intended external services.
 Never expose model, provider, GitHub, or other host credentials inside a coding
 sandbox unless the deployment explicitly provides a scoped credential.
-
-## GitHub operations
-
-Use the MCP server named `github` for GitHub issues, pull requests, repository
-metadata, searches, reviews, and every explicitly authorized GitHub mutation.
-The GitHub MCP runs in the trusted T3 control container and reuses its persisted
-`t3-auth gh login`. Never run authenticated `gh` commands inside `t3-sandbox`:
-sandbox workers intentionally receive no GitHub credential. If the `github` MCP
-is unavailable, report the missing parent capability instead of copying or
-requesting a token for the sandbox.
 
 ## SSH and Ansible deployments
 

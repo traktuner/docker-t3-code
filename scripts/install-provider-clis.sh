@@ -14,7 +14,7 @@ install_npm_packages() {
   export NPM_CONFIG_CACHE="$npm_cache"
   export npm_config_cache="$npm_cache"
 
-  npm install -g --prefix /usr/local --no-audit --no-fund --dangerously-allow-all-scripts \
+  npm install -g --prefix /usr/local --no-audit --no-fund --dangerously-allow-all-scripts --include=optional \
     "$@"
 
   if [[ "${T3_DOCKER_KEEP_NPM_CACHE:-0}" != "1" ]]; then
@@ -32,6 +32,14 @@ install_npm_provider_clis() {
     "@openai/codex@${CODEX_VERSION:-latest}" \
     "@anthropic-ai/claude-code@${CLAUDE_VERSION:-latest}" \
     "opencode-ai@${OPENCODE_VERSION:-latest}"
+
+  local claude_dir=/usr/local/lib/node_modules/@anthropic-ai/claude-code
+  local claude_binary="$claude_dir/bin/claude.exe"
+  node "$claude_dir/install.cjs"
+  if [[ ! -x "$claude_binary" || "$(stat -c '%s' "$claude_binary")" -lt 4096 ]]; then
+    echo "Claude native binary was not installed in the image." >&2
+    exit 1
+  fi
 }
 
 verify_installer() {

@@ -34,7 +34,7 @@ The workflow in `.github/workflows/container.yml` builds and publishes `linux/am
 ghcr.io/<owner>/<repo>
 ```
 
-It runs on pushes to `main`/`master`, manual dispatch, and a daily schedule. Pull requests build only `linux/amd64` and do not push. A scheduled run checks the stable `t3` npm version against published image tags and exits without tests, provider lookups, or image publishing when that T3 version is already present. A newly released T3 version triggers the normal validated build; provider CLI and toolchain releases alone never trigger an image rebuild. Pushes use the repository-pinned `T3_VERSION`, while a scheduled T3 release build uses the detected stable T3 version. BuildKit's GitHub Actions cache is exported in `mode=max`; the heavy provider-CLI layer is independent of `T3_VERSION`, so a T3 upgrade only invalidates the small T3 install layer.
+It runs on pushes to `main`/`master`, manual dispatch, and a daily schedule. Pull requests build only `linux/amd64` and do not push. Every image build resolves the current stable `t3@latest` version from npm; explicit older T3 versions are rejected. A scheduled run checks that resolved version against published image tags and exits without tests, provider lookups, or image publishing when that T3 version is already present. BuildKit's GitHub Actions cache is exported in `mode=max`; the heavy provider-CLI layer is independent of `T3_VERSION`, so a T3 upgrade only invalidates the small T3 install layer.
 
 Python tests/linting, Node and shell syntax, generated OpenSandbox TOML, and all
 Compose variants are validated before publishing. T3, agent-base, and gateway
@@ -61,7 +61,7 @@ sandbox-gateway
 sandbox-gateway-<t3-version>-<image-build-number>
 ```
 
-For example, the first image build for pinned `t3@0.0.28` is tagged `0.0.28-1`.
+For example, when npm resolves `t3@0.0.31`, the first image build is tagged `0.0.31-1`.
 
 After publishing, set this in `.env` if you want Compose to use the pushed image tag instead of a local name:
 
@@ -444,20 +444,21 @@ Run each required interactive provider login once after the persistent home
 volumes are mounted. Credentials remain in those volumes; do not bake them into
 the image, commit them, or copy them into logs.
 
-## Upgrading the Pinned T3 Version
+## T3 image build contract
 
-The tested pin is `0.0.28`. An upgrade is intentional rather than automatic:
+T3 is never downgraded. Every image build resolves the current stable
+`t3@latest` from npm and bakes that resolved version into the image:
 
-1. Change `T3_VERSION` together in `Dockerfile`, `.env.example`, and the
-   workflow `env`.
-2. Run `npx --yes t3@<version> serve --help` and verify the Node engine,
+1. Run `npx --yes t3@latest --version` and `npx --yes t3@latest serve --help`
+   to verify the Node engine,
    `--host`, `--port`, `--base-dir`, bootstrap flag, and positional workspace
    contract.
-3. Re-run the full source checks, Compose validation, image build, and in-image
+2. Re-run the full source checks, Compose validation, image build, and in-image
    CLI/version checks before publishing a new image.
 
-Do not enable a runtime `t3@latest` install. A manual workflow override is
-acceptable only after the same version-specific checks.
+T3 is not installed or upgraded at container startup. A workflow dispatch may
+leave the version input empty or set it to `latest`; any explicit version is
+rejected to prevent a downgrade.
 
 ## Deployment Boundary
 

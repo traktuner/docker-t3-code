@@ -10,11 +10,14 @@ const read = (name) => fs.readFileSync(path.join(root, name), "utf8");
 test("pins the official T3 CLI and optionally wraps only its browser auth boundary", () => {
   const dockerfile = read("Dockerfile");
   const entrypoint = read("scripts/entrypoint.sh");
+  const installer = read("scripts/install-provider-clis.sh");
+  const claudeLauncher = read("scripts/claude-launcher.sh");
   const doctor = read("scripts/t3-doctor.sh");
 
-  assert.match(dockerfile, /^ARG T3_VERSION=0\.0\.28$/m);
+  assert.match(dockerfile, /^ARG T3_VERSION=latest$/m);
   assert.match(dockerfile, /^EXPOSE 3773$/m);
   assert.match(dockerfile, /scripts\/auth-proxy\.mjs/);
+  assert.match(dockerfile, /scripts\/claude-launcher\.sh/);
   assert.doesNotMatch(dockerfile, /mcp-auth-helper|EXPOSE[^\n]*13774/);
 
   assert.match(entrypoint, /local t3_binary=\/usr\/local\/bin\/t3/);
@@ -30,6 +33,9 @@ test("pins the official T3 CLI and optionally wraps only its browser auth bounda
   }
   assert.match(entrypoint, /node \/opt\/t3-docker\/auth-proxy\.mjs/);
   assert.match(entrypoint, /T3_AUTH_PROXY_INTERNAL_PORT/);
+  assert.match(entrypoint, /runtime-bin/);
+  assert.match(installer, /--include=optional/);
+  assert.match(claudeLauncher, /exec \"\$bundled\"/);
   assert.doesNotMatch(entrypoint, /T3_UPDATE_T3|project add/);
   assert.doesNotMatch(doctor, /T3_AUTH_PROXY|T3_AUTH_WEB_HELPER|auth helper/);
 });
@@ -57,8 +63,11 @@ test("keeps T3 state, provider homes, and workspace as separate mounts", () => {
 });
 
 test("keeps the repository T3 pin synchronized", () => {
-  assert.match(read(".env.example"), /^T3_VERSION=0\.0\.28$/m);
-  assert.match(read(".github/workflows/container.yml"), /^\s+T3_VERSION: 0\.0\.28$/m);
+  const workflow = read(".github/workflows/container.yml");
+  assert.match(read(".env.example"), /^T3_VERSION=latest$/m);
+  assert.match(workflow, /^\s+T3_VERSION: latest$/m);
+  assert.match(workflow, /t3_version="\$\(npm view t3 version\)"/);
+  assert.match(workflow, /explicit version .*forbidden/);
   assert.doesNotMatch(read("config/t3code.example.toml"), /^\[auth\]$/m);
 });
 

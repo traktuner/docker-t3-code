@@ -12,7 +12,7 @@ on:
   workflow_dispatch:
     inputs:
       t3_version:
-        description: "T3 npm version to bake into the image. Empty uses the repository-pinned version."
+        description: "Must be latest or empty; every image build resolves the current t3@latest version."
         required: false
         type: string
       build_number:
@@ -36,7 +36,7 @@ concurrency:
 
 env:
   REGISTRY: ghcr.io
-  T3_VERSION: 0.0.28
+  T3_VERSION: latest
 
 jobs:
   build:
@@ -243,7 +243,12 @@ jobs:
         run: |
           set -euo pipefail
 
-          t3_version="${REQUESTED_T3_VERSION:-${SCHEDULED_T3_VERSION:-$T3_VERSION}}"
+          requested="${REQUESTED_T3_VERSION//[[:space:]]/}"
+          if [[ -n "$requested" && "$requested" != "latest" ]]; then
+            echo "T3 image builds always resolve t3@latest; explicit version '$requested' is forbidden." >&2
+            exit 1
+          fi
+          t3_version="$(npm view t3 version)"
 
           node - "$t3_version" "$REQUESTED_BUILD_NUMBER" <<'NODE'
           const fs = require("node:fs");

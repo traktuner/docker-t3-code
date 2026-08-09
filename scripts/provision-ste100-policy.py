@@ -577,14 +577,25 @@ def parse_args() -> tuple[str, str]:
     return args.scope, "uninstall" if args.uninstall else "install"
 
 
+def resolve_sources() -> tuple[Path, Path] | None:
+    script_directory = Path(__file__).resolve().parent
+    for source_root in (script_directory.parent, script_directory):
+        policy_source = (
+            source_root / "agent-assets" / "policies" / "asd-ste100-mandatory.md"
+        )
+        skill_source = source_root / "agent-assets" / "skills" / "asd-ste100"
+        if policy_source.is_file() and skill_source.is_dir():
+            return policy_source, skill_source
+    return None
+
+
 def main() -> int:
     scope, action = parse_args()
-    source_root = Path(__file__).resolve().parent.parent
-    policy_source = source_root / "agent-assets" / "policies" / "asd-ste100-mandatory.md"
-    skill_source = source_root / "agent-assets" / "skills" / "asd-ste100"
-    if not policy_source.is_file() or not skill_source.is_dir():
+    sources = resolve_sources()
+    if sources is None:
         print("ASD-STE100 image sources are missing.", file=sys.stderr)
         return 2
+    policy_source, skill_source = sources
     policy = policy_source.read_bytes()
     try:
         policy.decode("utf-8")

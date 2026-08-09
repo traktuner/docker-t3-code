@@ -22,7 +22,11 @@ function digest(file) {
 }
 
 function run(args, home, extra = {}) {
-  return spawnSync("python3", [provisioner, ...args], {
+  return runWith(provisioner, args, home, extra);
+}
+
+function runWith(script, args, home, extra = {}) {
+  return spawnSync("python3", [script, ...args], {
     encoding: "utf8",
     env: { ...process.env, HOME: home, ...extra },
   });
@@ -265,6 +269,24 @@ test("container scope installs every enabled provider without a sandbox URL", ()
   ]) {
     assert.equal(fs.existsSync(path.join(home, expected)), true, expected);
   }
+});
+
+test("source discovery supports the immutable image layout", () => {
+  const fixture = fs.mkdtempSync(path.join(os.tmpdir(), "t3-ste-image-layout-"));
+  const imageRoot = path.join(fixture, "opt", "t3-docker");
+  const imageProvisioner = path.join(imageRoot, "provision-ste100-policy.py");
+  const home = path.join(fixture, "home");
+  fs.mkdirSync(imageRoot, { recursive: true });
+  fs.mkdirSync(home);
+  fs.copyFileSync(provisioner, imageProvisioner);
+  fs.cpSync(path.join(root, "agent-assets"), path.join(imageRoot, "agent-assets"), {
+    recursive: true,
+  });
+
+  const result = runWith(imageProvisioner, ["--scope", "user", "--dry-run"], home);
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /CHANGE: install Codex policy/);
+  assert.doesNotMatch(result.stderr, /image sources are missing/);
 });
 
 test("container integration orders provisioning after sync and before harness start", () => {

@@ -330,6 +330,10 @@ provision_provider_config_dirs() {
   python3 /opt/t3-docker/provision-harness-instructions.py
 }
 
+provision_ste100_policy() {
+  python3 /opt/t3-docker/provision-ste100-policy.py --scope container
+}
+
 install_npm_latest() {
   local enabled="$1"
   local package_name="$2"
@@ -555,6 +559,7 @@ run_t3_headless() {
 
 hydrate_github_auth_for_opencode
 provision_provider_config_dirs
+provision_ste100_policy
 if [[ "${T3_AUTO_UPDATE_EFFECTIVE:-1}" == "1" ]]; then
   install_npm_latest "${T3_UPDATE_CODEX:-0}" "@openai/codex" "Codex CLI" "codex"
   install_npm_latest "${T3_UPDATE_CLAUDE:-0}" "@anthropic-ai/claude-code" "Claude Code" "claude" "install.cjs"

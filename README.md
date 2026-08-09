@@ -141,6 +141,93 @@ T3_WORKSPACE_GID=<share-group-id>
 Do not recursively chown the workspace to the container UID; that breaks SMB/NAS
 ACL expectations.
 
+## Mandatory ASD-STE100 writing policy
+
+The image applies a concise ASD-STE100 writing policy to operational English for
+every enabled agent harness. It covers parent-to-subagent briefs, subagent
+reports, handoffs, system prompts, tool and function descriptions, status and
+error messages, technical instructions and answers, checklists, and runbooks.
+The same core rules are present in the global policy, so a parent does not rely
+on a subagent to load the optional skill context.
+
+The policy excludes source code, identifiers, shell commands, data formats,
+protocol fields, unchanged logs, third-party errors, direct quotations,
+creative and marketing text, German communication, and technical terms whose
+simplification would reduce precision. Facts, numbers, conditions, exceptions,
+safety constraints, and scope statements must remain intact.
+
+The portable `asd-ste100` skill has two modes:
+
+- Silent writing mode is the default. The agent applies the rules without an
+  analysis or before-and-after table.
+- Explicit audit mode is used only for a requested STE audit, ASD-STE100 audit,
+  Simplification Review, before-and-after comparison, or STE rewrite.
+
+The unmodified upstream skill comes from
+[`danyuchn/asd-ste100-skill`](https://github.com/danyuchn/asd-ste100-skill) at
+commit `8564f8985f15104c2184f90531bfd1bbb25f3d5b` on `master`. The MIT-licensed
+files are vendored under `vendor/asd-ste100/`; `LOCK.json` records the complete
+file list and every SHA-256. The T3 overlay is separate under
+`agent-assets/skills/asd-ste100/`.
+
+At container startup, `scripts/provision-ste100-policy.py --scope container`
+runs after provider configuration sync and before any managed harness or T3
+server starts. It installs these managed paths:
+
+- Codex and OpenCode skill: `$HOME/.agents/skills/asd-ste100`
+- Claude Code skill: `${T3_CLAUDE_HOME_PATH}/.claude/skills/asd-ste100`
+- Codex policy: `$CODEX_HOME/AGENTS.md`
+- Claude Code policy: `${T3_CLAUDE_HOME_PATH}/.claude/CLAUDE.md`
+- OpenCode policy: `$OPENCODE_CONFIG_DIR/AGENTS.md`
+- Grok policy: `$GROK_CONFIG_DIR/AGENTS.md`
+
+If a Codex `AGENTS.override.md` already exists, the provisioner also manages a
+block in that file because Codex loads it before `AGENTS.md`. The provisioner
+never creates an override file.
+
+Cursor receives the mandatory policy through its ACP wrapper. The wrapper adds
+the sandbox policy only when sandbox instructions are enabled. It injects the
+deterministically combined policy once per ACP session. Grok receives the
+global policy only because no compatible Grok skill directory is assumed. The
+issue worker provisions its dedicated OpenCode policy and shared skill after
+its config mirror and before the worker starts.
+
+The mandatory policy is independent of `T3_SANDBOX_URL`,
+`T3_HARNESS_SANDBOX_INSTRUCTIONS`, and
+`T3_OPENCODE_SANDBOX_INSTRUCTIONS`. There is no normal environment switch that
+disables it.
+
+Use the same provisioner for local Codex, Claude Code, and OpenCode on macOS:
+
+```bash
+python3 scripts/provision-ste100-policy.py --scope user --dry-run
+python3 scripts/provision-ste100-policy.py --scope user --install
+python3 scripts/provision-ste100-policy.py --scope user --dry-run
+```
+
+The user targets are `~/.agents/skills/asd-ste100`,
+`~/.claude/skills/asd-ste100`, `~/.codex/AGENTS.md`,
+`~/.claude/CLAUDE.md`, and `~/.config/opencode/AGENTS.md`. A successful second
+dry-run reports no changes. Remove only managed content with:
+
+```bash
+python3 scripts/provision-ste100-policy.py --scope user --uninstall
+```
+
+The provisioner performs a complete conflict preflight before it writes. It
+preserves bytes and modes outside the managed markers. It rejects incomplete or
+duplicate markers, unsafe symlinks, and foreign or modified same-name skill
+directories. A dry-run reports every planned change and conflict without
+writing.
+
+To update upstream, review a new commit on `master`, verify its license, file
+types, modes, and contents, then replace both byte-identical upstream copies.
+Update the commit, file list, and all hashes in `vendor/asd-ste100/LOCK.json` in
+the same change. Never edit a vendored upstream file locally; change only the
+overlay policy or overlay skill.
+
+Policy compliance is model-based. It is not a mathematical output validator.
+
 ## Ephemeral Coding Sandboxes
 
 The optional stack under [`sandbox/`](sandbox/) keeps tool-heavy agent work out
@@ -387,7 +474,7 @@ Then put the numeric output of `id -u` and `id -g` into `T3_UID` and `T3_GID` in
 - Codex uses `CODEX_HOME = /data/codex`. For included ChatGPT/Codex usage, use `t3-auth codex login` / `codex login --device-auth`. API-key auth is available but uses API billing.
 - Claude Code uses `/data/claude-home` for the provider process. Use `ANTHROPIC_API_KEY` for API-billed automation, or `CLAUDE_CODE_OAUTH_TOKEN` from `claude setup-token` for subscription-backed CI/container use.
 - GitHub CLI auth lives under `/data/home/.config/gh`. Use `t3-auth gh login` for the browser/device flow, `t3-auth gh token` to persist `GH_TOKEN`/`GITHUB_TOKEN`, and `t3-auth gh setup-git` when you want `git` to use the GitHub CLI credential helper.
-- Cursor Agent is installed from the official Cursor installer. Its binary is exposed as both `agent` and `cursor-agent`; T3 starts it through `t3-cursor-agent`, which delegates to `T3_CURSOR_REAL_BINARY_PATH=agent` and injects the managed sandbox rule into ACP sessions.
+- Cursor Agent is installed from the official Cursor installer. Its binary is exposed as both `agent` and `cursor-agent`; T3 starts it through `t3-cursor-agent`, which delegates to `T3_CURSOR_REAL_BINARY_PATH=agent` and injects the mandatory STE policy plus any active sandbox policy into ACP sessions.
 - Grok Build is installed from the official xAI installer. Only the `grok` binary is exposed in `/usr/local/bin` so it does not shadow Cursor's `agent` command. For containers, use `XAI_API_KEY` or `grok login --device-auth`; persisted Grok config/session state lives in `/data/home/.grok`.
 - OpenCode can either be spawned by T3 or started by the container wrapper as a managed local server. Use the managed server mode when you need an explicit OpenCode config file, because T3's native OpenCode spawn path controls the spawned server environment.
 - T3's native provider update checks are disabled by default through `enableProviderUpdateChecks=false` (`T3_ENABLE_PROVIDER_UPDATE_CHECKS=0`), so provider update notices and one-click update prompts should stay hidden. Re-enable them only if you intentionally want T3 to check agent CLI versions.

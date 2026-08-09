@@ -63,6 +63,12 @@ rsync -rlpt --delete \
   --exclude='.DS_Store' \
   "$config_source"/ "$OPENCODE_CONFIG_DIR"/
 
+T3_PROVIDER_CODEX=0 \
+T3_PROVIDER_CLAUDE=0 \
+T3_PROVIDER_OPENCODE=1 \
+T3_PROVIDER_GROK=0 \
+  python3 /opt/t3-docker/provision-ste100-policy.py --scope container
+
 install -D -m 0600 \
   /opt/t3-docker/github-issue-worker-agent.md \
   "$OPENCODE_CONFIG_DIR/agents/github-issue-worker.md"

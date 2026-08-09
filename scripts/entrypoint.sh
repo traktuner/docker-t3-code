@@ -440,6 +440,7 @@ start_managed_opencode_server() {
 
   local host="${T3_OPENCODE_MANAGED_HOST:-127.0.0.1}"
   local port="${T3_OPENCODE_MANAGED_PORT:-4096}"
+  local binary="${T3_OPENCODE_BINARY_PATH:-opencode}"
   local config="${T3_OPENCODE_CONFIG:-}"
   local ready_url="${T3_OPENCODE_READY_URL:-http://${host}:${port}/global/health}"
   local -a server_env=(env)
@@ -449,7 +450,7 @@ start_managed_opencode_server() {
   fi
 
   echo "Starting managed OpenCode server on http://${host}:${port}"
-  "${server_env[@]}" opencode serve "--hostname=${host}" "--port=${port}" &
+  "${server_env[@]}" "$binary" serve "--hostname=${host}" "--port=${port}" &
   managed_opencode_pid="$!"
 
   for _ in $(seq 1 30); do

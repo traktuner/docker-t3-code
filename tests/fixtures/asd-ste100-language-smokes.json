@@ -1,0 +1,52 @@
+[
+  {
+    "id": "long-tool-description",
+    "language": "en",
+    "mode": "silent",
+    "mustPreserve": ["120 seconds", "read-only"],
+    "mustNotProduce": ["before-after-table"]
+  },
+  {
+    "id": "ambiguous-error-message",
+    "language": "en",
+    "mode": "silent",
+    "mustPreserve": ["exit code 17", "retry once"],
+    "mustNotProduce": ["before-after-table"]
+  },
+  {
+    "id": "subagent-brief",
+    "language": "en",
+    "mode": "silent",
+    "sections": ["objective", "scope", "inputs", "constraints", "verification", "output format"]
+  },
+  {
+    "id": "conditional-status-report",
+    "language": "en",
+    "mode": "silent",
+    "mustPreserve": ["if the cache is empty", "except arm64"]
+  },
+  {
+    "id": "safety-critical-instruction",
+    "language": "en",
+    "mode": "silent",
+    "mustPreserve": ["230 V", "before opening the enclosure"]
+  },
+  {
+    "id": "code-log-quote",
+    "language": "en",
+    "mode": "silent",
+    "unchanged": ["code", "log", "quotation"]
+  },
+  {
+    "id": "german-text",
+    "language": "de",
+    "mode": "excluded",
+    "mustNotProduce": ["translation", "before-after-table"]
+  },
+  {
+    "id": "explicit-ste-audit",
+    "language": "en",
+    "mode": "audit",
+    "mustProduce": ["violations", "before-after-table"]
+  }
+]

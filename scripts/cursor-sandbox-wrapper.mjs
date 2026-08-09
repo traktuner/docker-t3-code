@@ -33,6 +33,13 @@ export function injectPolicyLine(line, policy, injectedSessions) {
   return JSON.stringify(message);
 }
 
+export function combinePolicies(stePolicy, sandboxPolicy) {
+  return [stePolicy, sandboxPolicy]
+    .map((policy) => (policy || "").trim())
+    .filter(Boolean)
+    .join("\n\n");
+}
+
 class JsonLinePolicyTransform extends Transform {
   constructor(policy) {
     super();
@@ -60,20 +67,26 @@ class JsonLinePolicyTransform extends Transform {
   }
 }
 
-function readPolicy(environment) {
-  const active =
+export function readPolicy(environment) {
+  const stePolicyPath =
+    environment.T3_STE100_POLICY_FILE ||
+    "/opt/t3-docker/agent-assets/policies/asd-ste100-mandatory.md";
+  const stePolicy = fs.readFileSync(stePolicyPath, "utf8");
+  const sandboxActive =
     Boolean((environment.T3_SANDBOX_URL || "").trim()) &&
     truthy(
       environment.T3_HARNESS_SANDBOX_INSTRUCTIONS ??
         environment.T3_OPENCODE_SANDBOX_INSTRUCTIONS ??
         "1",
     );
-  if (!active) return "";
-
-  const policyPath =
-    environment.T3_HARNESS_SANDBOX_INSTRUCTIONS_FILE ||
-    "/opt/t3-docker/t3-sandbox-instructions.md";
-  return fs.readFileSync(policyPath, "utf8");
+  let sandboxPolicy = "";
+  if (sandboxActive) {
+    const sandboxPolicyPath =
+      environment.T3_HARNESS_SANDBOX_INSTRUCTIONS_FILE ||
+      "/opt/t3-docker/t3-sandbox-instructions.md";
+    sandboxPolicy = fs.readFileSync(sandboxPolicyPath, "utf8");
+  }
+  return combinePolicies(stePolicy, sandboxPolicy);
 }
 
 function run() {

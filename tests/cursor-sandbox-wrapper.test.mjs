@@ -1,7 +1,14 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import test from "node:test";
 
-import { injectPolicyLine } from "../scripts/cursor-sandbox-wrapper.mjs";
+import {
+  combinePolicies,
+  injectPolicyLine,
+  readPolicy,
+} from "../scripts/cursor-sandbox-wrapper.mjs";
 
 function prompt(sessionId, text = "inspect the repository") {
   return JSON.stringify({
@@ -33,4 +40,38 @@ test("passes non-prompt and malformed ACP lines through unchanged", () => {
 
   assert.equal(injectPolicyLine(initialize, "USE SANDBOX", sessions), initialize);
   assert.equal(injectPolicyLine("not-json", "USE SANDBOX", sessions), "not-json");
+});
+
+test("combines STE-only, sandbox-only, and both policies deterministically", () => {
+  assert.equal(combinePolicies("USE STE", ""), "USE STE");
+  assert.equal(combinePolicies("", "USE SANDBOX"), "USE SANDBOX");
+  assert.equal(combinePolicies("USE STE\n", "\nUSE SANDBOX"), "USE STE\n\nUSE SANDBOX");
+});
+
+test("loads mandatory STE without a sandbox and adds sandbox policy only when active", () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "t3-cursor-ste-"));
+  const ste = path.join(directory, "ste.md");
+  const sandbox = path.join(directory, "sandbox.md");
+  fs.writeFileSync(ste, "USE STE\n");
+  fs.writeFileSync(sandbox, "USE SANDBOX\n");
+
+  assert.equal(readPolicy({ T3_STE100_POLICY_FILE: ste }), "USE STE");
+  assert.equal(
+    readPolicy({
+      T3_STE100_POLICY_FILE: ste,
+      T3_SANDBOX_URL: "http://sandbox",
+      T3_HARNESS_SANDBOX_INSTRUCTIONS: "1",
+      T3_HARNESS_SANDBOX_INSTRUCTIONS_FILE: sandbox,
+    }),
+    "USE STE\n\nUSE SANDBOX",
+  );
+  assert.equal(
+    readPolicy({
+      T3_STE100_POLICY_FILE: ste,
+      T3_SANDBOX_URL: "http://sandbox",
+      T3_HARNESS_SANDBOX_INSTRUCTIONS: "0",
+      T3_HARNESS_SANDBOX_INSTRUCTIONS_FILE: sandbox,
+    }),
+    "USE STE",
+  );
 });

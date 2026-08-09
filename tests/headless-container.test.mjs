@@ -34,6 +34,8 @@ test("pins the official T3 CLI and optionally wraps only its browser auth bounda
   assert.match(entrypoint, /node \/opt\/t3-docker\/auth-proxy\.mjs/);
   assert.match(entrypoint, /T3_AUTH_PROXY_INTERNAL_PORT/);
   assert.match(entrypoint, /runtime-bin/);
+  assert.match(entrypoint, /local binary="\$\{T3_OPENCODE_BINARY_PATH:-opencode\}"/);
+  assert.match(entrypoint, /"\$\{server_env\[@\]\}" "\$binary" serve/);
   assert.match(installer, /--include=optional/);
   assert.match(claudeLauncher, /exec \"\$bundled\"/);
   assert.doesNotMatch(entrypoint, /T3_UPDATE_T3|project add/);

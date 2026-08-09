@@ -13,3 +13,9 @@
 - Do not expect Cursor to discover the global ASD-STE100 skill or rule files: inject the mandatory policy once through the ACP wrapper and combine it independently with the conditional sandbox policy (`scripts/cursor-sandbox-wrapper.mjs`).
 - Do not provision only the interactive T3 home: the autonomous issue worker mirrors config into a separate home and must install its policy and skill after that mirror (`scripts/issue-worker-entrypoint.sh`).
 - Do not update an ASD-STE100 vendor file without updating the pinned commit, complete file list, and every SHA-256 together; vendored upstream files must remain byte-identical and local behavior belongs in the overlay (`vendor/asd-ste100/LOCK.json`, `agent-assets/skills/asd-ste100/`).
+- Do not derive ASD-STE100 assets only from the provisioner's repository layout. The image copies
+  the script and `agent-assets` side by side under `/opt/t3-docker`, so source discovery must support
+  both layouts and a test must execute the flattened image layout (`scripts/provision-ste100-policy.py`).
+- Do not start the managed OpenCode server with a bare `opencode` command. Use
+  `T3_OPENCODE_BINARY_PATH` so an immutable deployment can select the image binary and cannot be
+  shadowed by a stale persistent npm installation (`scripts/entrypoint.sh`).

@@ -142,7 +142,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     && apt-get install -y --no-install-recommends gh
 
 # Install the GitHub Actions runner for local workflow simulation.
-RUN curl -sSfL https://raw.githubusercontent.com/nektos/act/master/install.sh | sh -s -- -b /usr/local/bin/act
+RUN curl -sSfL https://raw.githubusercontent.com/nektos/act/master/install.sh | sh -s -- -b /usr/local/bin
 
 # Install Gitleaks from its official archive because Debian Bookworm has no package.
 ARG TARGETARCH
@@ -315,7 +315,7 @@ RUN for binary in \
       unrtf \
       yamllint \
       yt-dlp; do \
-        command -v "$binary"; \
+        command -v "$binary" || exit 1; \
     done
 
 # Execute essential binaries to detect incompatible architecture archives.

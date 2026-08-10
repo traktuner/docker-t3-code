@@ -537,3 +537,70 @@ jobs:
           cache-to: |
             type=gha,mode=max,scope=${{ steps.image.outputs.name }}
             type=registry,ref=${{ env.REGISTRY }}/${{ steps.image.outputs.name }}:buildcache,mode=max,ignore-error=true
+
+      # Verify the published amd64 image with the hardened runtime settings.
+      - name: Verify published image runtime
+        if: github.event_name != 'pull_request' && steps.version.outputs.should_build == 'true'
+        shell: bash
+        env:
+          IMAGE_NAME: ${{ steps.image.outputs.name }}
+        run: |
+          set -euo pipefail
+
+          image="${REGISTRY}/${IMAGE_NAME}:sha-${GITHUB_SHA::7}"
+          container_name="t3-runtime-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          config_dir="$(mktemp -d)"
+
+          cleanup() {
+            docker rm -f "$container_name" >/dev/null 2>&1 || true
+            rm -rf "$config_dir"
+          }
+          trap cleanup EXIT
+
+          printf '\n' > "$config_dir/t3code.toml"
+          docker pull "$image"
+
+          docker run --rm --entrypoint bash "$image" -lc \
+            'cargo --version && rustc --version && go version && cmake --version && act --version'
+
+          docker run --rm \
+            --read-only \
+            --tmpfs /tmp:size=1G \
+            --entrypoint /usr/bin/id \
+            "$image"
+
+          docker run -d \
+            --name "$container_name" \
+            --read-only \
+            --tmpfs /tmp:size=1G \
+            --tmpfs /var/tmp:size=500M \
+            --tmpfs /data/t3/messages:size=200M \
+            --cap-drop ALL \
+            --cap-add NET_BIND_SERVICE \
+            --cap-add CHOWN \
+            --cap-add SETGID \
+            --cap-add SETUID \
+            --security-opt no-new-privileges:true \
+            --security-opt seccomp=unconfined \
+            --mount "type=bind,source=$config_dir,target=/config,readonly" \
+            --mount type=volume,target=/workspace \
+            --mount type=volume,target=/data/t3 \
+            --mount type=volume,target=/data/home \
+            --mount type=volume,target=/data/npm-global \
+            --mount type=volume,target=/data/npm-cache \
+            --mount type=volume,target=/data/codex \
+            --mount type=volume,target=/data/claude-home \
+            "$image"
+
+          for _ in $(seq 1 60); do
+            if docker exec "$container_name" /opt/t3-docker/healthcheck.sh; then
+              exit 0
+            fi
+            if ! docker inspect --format '{{.State.Running}}' "$container_name" | grep -qx true; then
+              break
+            fi
+            sleep 2
+          done
+
+          docker logs "$container_name"
+          exit 1

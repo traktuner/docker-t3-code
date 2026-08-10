@@ -32,19 +32,25 @@ ENV DEBIAN_FRONTEND=noninteractive \
     npm_config_cache=/data/npm-cache \
     PATH=/data/npm-global/bin:/data/home/.local/bin:/data/home/.grok/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
+# Install compiler, diagnostics, document, CI, and debugging packages.
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
     rm -f /etc/apt/apt.conf.d/docker-clean \
     && apt-get update \
     && apt-get install -y --no-install-recommends \
+      ansible-lint \
       bash \
+      btop \
       build-essential \
       ca-certificates \
+      clang \
+      cmake \
       curl \
       default-mysql-client \
-      dumb-init \
       dnsutils \
+      dumb-init \
       fd-find \
+      ffmpeg \
       file \
       git \
       git-lfs \
@@ -53,11 +59,21 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
       iputils-ping \
       jq \
       less \
+      libimage-exiftool-perl \
+      libssl-dev \
+      llvm \
       lsof \
+      ltrace \
+      mtr-tiny \
+      ncat \
+      ncdu \
       netcat-openbsd \
+      ninja-build \
       openssh-client \
+      pandoc \
       patch \
       pkg-config \
+      poppler-utils \
       postgresql-client \
       procps \
       python3 \
@@ -69,10 +85,18 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
       rsync \
       shellcheck \
       sqlite3 \
+      ssldump \
       strace \
+      sysstat \
+      tcpdump \
+      tesseract-ocr \
+      tesseract-ocr-deu \
       tree \
+      unrtf \
       unzip \
+      yamllint \
       yq \
+      yt-dlp \
       zip
 
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
@@ -86,11 +110,24 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     && apt-get update \
     && apt-get install -y --no-install-recommends gh
 
+# Install the GitHub Actions runner for local workflow simulation.
+RUN curl -sSfL https://raw.githubusercontent.com/nektos/act/master/install.sh | sh -s -- -b /usr/local/bin/act
+
+# Install Gitleaks from its official archive because Debian Bookworm has no package.
+ARG GITLEAKS_VERSION=8.30.1
+RUN curl -fsSL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" -o /tmp/gitleaks.tar.gz \
+    && tar -C /usr/local/bin -xzf /tmp/gitleaks.tar.gz gitleaks \
+    && rm /tmp/gitleaks.tar.gz
+
 RUN userdel -r node 2>/dev/null || true \
     && useradd --create-home --home-dir /home/t3 --shell /bin/bash --uid 1000 t3 \
     && mkdir -p /data /config /workspace /opt/t3-docker \
     && ln -s /usr/bin/fdfind /usr/local/bin/fd \
     && chown -R t3:t3 /data /config /workspace /opt/t3-docker
+
+# Create the message board directories with non-root ownership.
+RUN mkdir -p /data/t3/messages/archive \
+    && chown -R t3:t3 /data/t3/messages
 
 COPY scripts/install-provider-clis.sh /opt/t3-docker/install-provider-clis.sh
 
@@ -134,6 +171,9 @@ RUN uv_installer="$(mktemp)" \
       [ ! -e "$bin" ] || chmod +x "$bin"; \
     done
 
+# Install Python PDF text extraction support.
+RUN pip install --break-system-packages pdfminer.six
+
 RUN bun_installer="$(mktemp)" \
     && curl -fsSL https://bun.sh/install -o "$bun_installer" \
     && if [[ -n "$BUN_INSTALLER_SHA256" ]]; then \
@@ -147,6 +187,18 @@ RUN bun_installer="$(mktemp)" \
       [ ! -e "$bin" ] || chmod +x "$bin"; \
     done
 
+# Install the stable Rust compiler and Cargo.
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y \
+    && . "$HOME/.cargo/env" \
+    && rustup default stable
+ENV PATH="$HOME/.cargo/bin:$PATH"
+
+# Install the final Go 1.22 patch release because the minor-only URL does not exist.
+RUN curl -fsSL https://go.dev/dl/go1.22.12.linux-amd64.tar.gz -o /tmp/go.tar.gz \
+    && tar -C /usr/local -xzf /tmp/go.tar.gz \
+    && rm /tmp/go.tar.gz
+ENV PATH="/usr/local/go/bin:$PATH"
+
 ARG T3_VERSION=latest
 
 RUN --mount=type=cache,target=/tmp/npm-cache \
@@ -155,6 +207,8 @@ RUN --mount=type=cache,target=/tmp/npm-cache \
 
 COPY --chown=t3:t3 scripts/render-config.py /opt/t3-docker/render-config.py
 COPY --chown=t3:t3 scripts/entrypoint.sh /opt/t3-docker/entrypoint.sh
+# Install the message cleanup utility.
+COPY --chown=t3:t3 scripts/cleanup-messages.sh /opt/t3-docker/cleanup-messages.sh
 COPY --chown=t3:t3 scripts/healthcheck.sh /opt/t3-docker/healthcheck.sh
 COPY --chown=t3:t3 scripts/auth-proxy.mjs /opt/t3-docker/auth-proxy.mjs
 COPY --chown=t3:t3 scripts/harness-auth.sh /opt/t3-docker/harness-auth.sh
@@ -180,6 +234,9 @@ COPY --chown=t3:t3 scripts/t3-sandbox-only-plugin.js /opt/t3-docker/t3-sandbox-o
 COPY --chown=t3:t3 agent-assets /opt/t3-docker/agent-assets
 COPY --chown=t3:t3 vendor/asd-ste100 /opt/t3-docker/vendor/asd-ste100
 
+# Make the message cleanup command executable.
+RUN chmod +x /opt/t3-docker/cleanup-messages.sh
+
 RUN chmod +x /opt/t3-docker/render-config.py /opt/t3-docker/entrypoint.sh /opt/t3-docker/healthcheck.sh /opt/t3-docker/auth-proxy.mjs /opt/t3-docker/harness-auth.sh /opt/t3-docker/provision-opencode-mcp.mjs /opt/t3-docker/provision-harness-mcp.sh /opt/t3-docker/provision-harness-instructions.py /opt/t3-docker/provision-ste100-policy.py /opt/t3-docker/configure-codex-mcp.py /opt/t3-docker/configure-cursor-mcp.mjs /opt/t3-docker/claude-launcher.sh /opt/t3-docker/t3-sandbox-mcp.mjs /opt/t3-docker/t3-xcode-mcp.mjs /opt/t3-docker/t3-xcode-auth.sh /opt/t3-docker/t3-doctor.sh /opt/t3-docker/github-issue-worker.mjs /opt/t3-docker/github-git-askpass.sh /opt/t3-docker/issue-worker-entrypoint.sh \
     && mkdir -p /opt/t3-docker/runtime-bin \
     && ln -s /opt/t3-docker/claude-launcher.sh /opt/t3-docker/runtime-bin/claude \
@@ -190,6 +247,39 @@ RUN chmod +x /opt/t3-docker/render-config.py /opt/t3-docker/entrypoint.sh /opt/t
     && ln -s /opt/t3-docker/t3-doctor.sh /usr/local/bin/t3-doctor \
     && ln -s /opt/t3-docker/cursor-sandbox-wrapper.mjs /usr/local/bin/t3-cursor-agent \
     && ln -s /opt/t3-docker/github-issue-worker.mjs /usr/local/bin/t3-issue-worker
+
+# Fail the build if a requested tool is not available.
+RUN for binary in \
+      act \
+      ansible-lint \
+      btop \
+      cargo \
+      clang \
+      cmake \
+      exiftool \
+      ffmpeg \
+      g++ \
+      gcc \
+      gitleaks \
+      go \
+      ldd \
+      ltrace \
+      mtr \
+      ncat \
+      ncdu \
+      ninja \
+      pandoc \
+      pdftotext \
+      rustc \
+      sar \
+      ssldump \
+      tcpdump \
+      tesseract \
+      unrtf \
+      yamllint \
+      yt-dlp; do \
+        command -v "$binary"; \
+    done
 
 ARG T3_BUILD_NUMBER=1
 

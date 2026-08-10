@@ -9,9 +9,25 @@ services:
     restart: unless-stopped
     expose:
       - "3773"
-    cap_drop: ["ALL"]
+
+    # Restrict the container filesystem and Linux privileges.
+    read_only: true
+    tmpfs:
+      - /tmp:size=1G
+      - /var/tmp:size=500M
+      - /data/t3/messages:size=200M
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+      - CHOWN
+      - SETGID
+      - SETUID
     security_opt:
       - no-new-privileges:true
+      # Temporary for debugging; replace with custom Seccomp profile before production use.
+      - seccomp:unconfined
+
     environment:
       T3CODE_CONFIG_PATH: /config/t3code.toml
       T3CODE_HOME: /data/t3

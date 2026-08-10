@@ -55,10 +55,23 @@ test("keeps T3 state, provider homes, and workspace as separate mounts", () => {
       assert.ok(compose.includes(target), `${composeFile} missing ${target}`);
     }
     assert.match(compose, /expose:\n\s+- "3773"/);
-    assert.doesNotMatch(
+    assert.doesNotMatch(compose, /^\s+(ports:|privileged:|network_mode:|pid:)/m);
+    assert.match(compose, /^    read_only: true$/m);
+    assert.match(
       compose,
-      /^\s+(ports:|privileged:|cap_add:|network_mode:|pid:)/m,
+      /^    tmpfs:\n      - \/tmp:size=1G\n      - \/var\/tmp:size=500M\n      - \/data\/t3\/messages:size=200M$/m,
     );
+    assert.match(
+      compose,
+      /^    cap_add:\n      - NET_BIND_SERVICE\n      - CHOWN\n      - SETGID\n      - SETUID$/m,
+    );
+    assert.equal(
+      [...compose.matchAll(/^    cap_add:$/gm)].length,
+      1,
+      `${composeFile} must define one capability allowlist`,
+    );
+    assert.match(compose, /^      - no-new-privileges:true$/m);
+    assert.match(compose, /^      - seccomp:unconfined$/m);
     assert.match(compose, /T3_AUTH_PROXY:/);
     assert.doesNotMatch(compose, /docker\.sock|T3_AUTH_WEB_HELPER/);
   }

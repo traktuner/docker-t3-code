@@ -563,3 +563,14 @@ Cloudflare Access -> Keycloak -> Traefik -> WSS -> T3 session
 
 This repository build does not deploy or alter Cloudflare, Keycloak, Traefik,
 TrueNAS, NFS, or production containers.
+
+## Message Cleanup
+
+The image includes `/opt/t3-docker/cleanup-messages.sh`. Run it daily to delete
+session messages older than one day and archived messages older than 30 days.
+
+For example, add this entry to the Docker host's crontab:
+
+```cron
+0 3 * * * /usr/bin/docker exec t3code /opt/t3-docker/cleanup-messages.sh
+```

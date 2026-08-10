@@ -145,8 +145,14 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 RUN curl -sSfL https://raw.githubusercontent.com/nektos/act/master/install.sh | sh -s -- -b /usr/local/bin/act
 
 # Install Gitleaks from its official archive because Debian Bookworm has no package.
+ARG TARGETARCH
 ARG GITLEAKS_VERSION=8.30.1
-RUN curl -fsSL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" -o /tmp/gitleaks.tar.gz \
+RUN case "$TARGETARCH" in \
+      amd64) gitleaks_arch=x64 ;; \
+      arm64) gitleaks_arch=arm64 ;; \
+      *) echo "Unsupported Gitleaks architecture: $TARGETARCH" >&2; exit 1 ;; \
+    esac \
+    && curl -fsSL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_${gitleaks_arch}.tar.gz" -o /tmp/gitleaks.tar.gz \
     && tar -C /usr/local/bin -xzf /tmp/gitleaks.tar.gz gitleaks \
     && rm /tmp/gitleaks.tar.gz
 
@@ -225,7 +231,7 @@ RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y \
 ENV PATH="$HOME/.cargo/bin:$PATH"
 
 # Install the final Go 1.22 patch release because the minor-only URL does not exist.
-RUN curl -fsSL https://go.dev/dl/go1.22.12.linux-amd64.tar.gz -o /tmp/go.tar.gz \
+RUN curl -fsSL "https://go.dev/dl/go1.22.12.linux-${TARGETARCH}.tar.gz" -o /tmp/go.tar.gz \
     && tar -C /usr/local -xzf /tmp/go.tar.gz \
     && rm /tmp/go.tar.gz
 ENV PATH="/usr/local/go/bin:$PATH"
@@ -311,6 +317,14 @@ RUN for binary in \
       yt-dlp; do \
         command -v "$binary"; \
     done
+
+# Execute essential binaries to detect incompatible architecture archives.
+RUN act --version \
+    && cargo --version \
+    && cmake --version \
+    && gitleaks version \
+    && go version \
+    && rustc --version
 
 ARG T3_BUILD_NUMBER=1
 

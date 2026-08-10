@@ -63,7 +63,6 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
       libssl-dev \
       llvm \
       lsof \
-      ltrace \
       mtr-tiny \
       ncat \
       ncdu \
@@ -98,6 +97,38 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
       yq \
       yt-dlp \
       zip
+
+# Install ltrace from Debian where available and build the pinned Debian source elsewhere.
+ARG LTRACE_VERSION=0.7.91~git20230705.8eabf68
+ARG LTRACE_SOURCE_SHA256=da0317b2e6951a035fa606a89e82dc5f99623b6a30ef71bc08c5d23bf00b9ef1
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
+    ltrace_metadata=/tmp/ltrace-package-metadata; \
+    apt-cache show ltrace > "$ltrace_metadata" 2>/dev/null || true; \
+    if grep -q '^Package: ltrace$' "$ltrace_metadata"; then \
+      apt-get install -y --no-install-recommends ltrace; \
+    else \
+      ltrace_archive=/tmp/ltrace.tar.xz; \
+      ltrace_source="/tmp/ltrace-${LTRACE_VERSION}"; \
+      apt-get install -y --no-install-recommends \
+        autoconf \
+        automake \
+        libelf-dev \
+        libselinux1-dev \
+        libtool; \
+      curl -fsSL \
+        "https://deb.debian.org/debian/pool/main/l/ltrace/ltrace_${LTRACE_VERSION}.orig.tar.xz" \
+        -o "$ltrace_archive"; \
+      printf '%s  %s\n' "$LTRACE_SOURCE_SHA256" "$ltrace_archive" | sha256sum -c -; \
+      tar -C /tmp -xJf "$ltrace_archive"; \
+      cd "$ltrace_source"; \
+      ./autogen.sh; \
+      ./configure --prefix=/usr/local; \
+      make -j"$(nproc)"; \
+      make install; \
+      rm -rf "$ltrace_archive" "$ltrace_source"; \
+    fi
+RUN rm -f /tmp/ltrace-package-metadata
 
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \

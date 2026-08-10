@@ -584,13 +584,13 @@ jobs:
             --security-opt no-new-privileges:true \
             --security-opt seccomp=unconfined \
             --mount "type=bind,source=$config_dir,target=/config,readonly" \
-            --mount type=volume,target=/workspace \
-            --mount type=volume,target=/data/t3 \
-            --mount type=volume,target=/data/home \
-            --mount type=volume,target=/data/npm-global \
-            --mount type=volume,target=/data/npm-cache \
-            --mount type=volume,target=/data/codex \
-            --mount type=volume,target=/data/claude-home \
+            --tmpfs /workspace:mode=1777 \
+            --tmpfs /data/t3:mode=1777 \
+            --tmpfs /data/home:mode=1777 \
+            --tmpfs /data/npm-global:mode=1777 \
+            --tmpfs /data/npm-cache:mode=1777 \
+            --tmpfs /data/codex:mode=1777 \
+            --tmpfs /data/claude-home:mode=1777 \
             "$image"
 
           for _ in $(seq 1 60); do

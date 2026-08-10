@@ -235,10 +235,12 @@ RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y \
     && rustup default stable
 ENV PATH="$HOME/.cargo/bin:$PATH"
 
-# Install the final Go 1.22 patch release because the minor-only URL does not exist.
+# Install Go 1.22 and expose its tools to login shells.
 RUN curl -fsSL "https://go.dev/dl/go1.22.12.linux-${TARGETARCH}.tar.gz" -o /tmp/go.tar.gz \
     && tar -C /usr/local -xzf /tmp/go.tar.gz \
-    && rm /tmp/go.tar.gz
+    && rm /tmp/go.tar.gz \
+    && ln -s /usr/local/go/bin/go /usr/local/bin/go \
+    && ln -s /usr/local/go/bin/gofmt /usr/local/bin/gofmt
 ENV PATH="/usr/local/go/bin:$PATH"
 
 ARG T3_VERSION=latest

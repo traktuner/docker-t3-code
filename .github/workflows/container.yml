@@ -550,6 +550,7 @@ jobs:
           image="${REGISTRY}/${IMAGE_NAME}:sha-${GITHUB_SHA::7}"
           container_name="t3-runtime-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           config_dir="$(mktemp -d)"
+          chmod 0755 "$config_dir"
 
           cleanup() {
             docker rm -f "$container_name" >/dev/null 2>&1 || true

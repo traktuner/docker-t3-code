@@ -17,5 +17,6 @@
   the script and `agent-assets` side by side under `/opt/t3-docker`, so source discovery must support
   both layouts and a test must execute the flattened image layout (`scripts/provision-ste100-policy.py`).
 - Do not start the managed OpenCode server with a bare `opencode` command. Use
-  `T3_OPENCODE_BINARY_PATH` so an immutable deployment can select the image binary and cannot be
-  shadowed by a stale persistent npm installation (`scripts/entrypoint.sh`).
+   `T3_OPENCODE_BINARY_PATH` so an immutable deployment can select the image binary and cannot be
+   shadowed by a stale persistent npm installation (`scripts/entrypoint.sh`).
+- Do not classify `GitVcsDriver.fetchRemoteForStatus` errors in the main T3 log as sandbox command failures. T3 polls every registered `/workspace` repository independently, and network-backed Git metadata or an invalid `refs/stash` can make the background fetch fail. Check `.git/locks` older than 1 day, `git fsck --no-dangling`, and `git cat-file -e refs/stash SHA` before assuming network or auth failure. The fix is in `cleanup_stale_git_locks()` (`scripts/entrypoint.sh`, commit `a9af947`).

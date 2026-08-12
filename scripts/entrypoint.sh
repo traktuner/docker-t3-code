@@ -569,10 +569,55 @@ if [[ "${T3_AUTO_UPDATE_EFFECTIVE:-1}" == "1" ]]; then
   install_grok_latest "${T3_UPDATE_GROK:-0}"
 fi
 
+cleanup_stale_git_locks() {
+  local workspace="${T3_WORKDIR:-/workspace}"
+  local max_depth="${T3_GIT_REPOSITORY_SCAN_DEPTH:-8}"
+  local git_marker repository stash_ref stash_sha ts
+
+  [[ -d "$workspace" ]] || return 0
+  [[ "$max_depth" =~ ^[1-9][0-9]*$ ]] || {
+    echo "T3_GIT_REPOSITORY_SCAN_DEPTH must be a positive integer." >&2
+    exit 1
+  }
+
+  while IFS= read -r -d '' git_marker; do
+    repository="$(dirname "$git_marker")"
+
+    # Remove stale lock files older than 1 day (common on NFS mounts).
+    while IFS= read -r -d '' lock_file; do
+      rm -f "$lock_file" && echo "Removed stale Git lock: $lock_file"
+    done < <(
+      find "$repository/.git" \( -name "*.lock" \) -type f -mtime +1 -print0 2>/dev/null
+    )
+
+    # Move corrupt stash refs that point to missing Git objects.
+    stash_ref="$repository/.git/refs/stash"
+    if [[ -f "$stash_ref" ]]; then
+      stash_sha="$(head -c 40 "$stash_ref" 2>/dev/null)"
+      if [[ "$stash_sha" =~ ^[0-9a-f]{40}$ ]] && ! git -C "$repository" cat-file -e "$stash_sha" 2>/dev/null; then
+        ts="$(date +%Y%m%d%H%M%S)"
+        mv "$stash_ref" "${stash_ref}.corrupt.${ts}" 2>/dev/null && \
+          echo "Moved corrupt stash ref in: $repository"
+        [[ -f "$repository/.git/logs/refs/stash" ]] && \
+          mv "$repository/.git/logs/refs/stash" \
+             "$repository/.git/logs/refs/stash.corrupt.${ts}" 2>/dev/null
+        git -C "$repository" reflog expire --expire=now --all 2>/dev/null \
+          || echo "Warning: reflog expire failed for: $repository" >&2
+        git -C "$repository" gc --prune=now 2>/dev/null \
+          || echo "Warning: git gc failed for: $repository" >&2
+      fi
+    fi
+  done < <(
+    find "$workspace" -xdev -mindepth 1 -maxdepth "$max_depth" \
+      \( -type d -o -type f \) -name .git -print0 2>/dev/null
+  )
+}
+
 if ! /opt/t3-docker/provision-harness-mcp.sh; then
   echo "Warning: failed to provision one or more harness MCP registrations." >&2
 fi
 
+cleanup_stale_git_locks
 configure_git_safe_directories
 
 start_managed_opencode_server

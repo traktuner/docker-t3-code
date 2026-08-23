@@ -228,6 +228,47 @@ overlay policy or overlay skill.
 
 Policy compliance is model-based. It is not a mathematical output validator.
 
+## Promo video script skill
+
+The image includes the portable `promo-video-script` skill for product promo,
+marketing, sales, and animated explainer video requests. The unmodified source
+comes from
+[`Gnurpreet/promo-video-script-skill`](https://github.com/Gnurpreet/promo-video-script-skill)
+at commit `0d34d65fb02b29016a25b38c3e1a593731732f76` on `main`. The MIT-licensed
+files and their SHA-256 values are pinned under `vendor/promo-video-script/`.
+The container does not download the skill at startup.
+
+At container startup, `scripts/provision-promo-video-skill.py --scope container`
+runs after provider configuration sync and before any provider harness or T3
+server starts. It installs the skill into these enabled harness paths:
+
+- Codex, OpenCode, and Cursor: `$HOME/.agents/skills/promo-video-script`
+- Claude Code: `${T3_CLAUDE_HOME_PATH}/.claude/skills/promo-video-script`
+- Grok: `$GROK_CONFIG_DIR/skills/promo-video-script`
+- Issue worker: `$HOME/.agents/skills/promo-video-script` in its separate home
+
+Use the same provisioner for all supported local macOS harnesses:
+
+```bash
+python3 scripts/provision-promo-video-skill.py --scope user --dry-run
+python3 scripts/provision-promo-video-skill.py --scope user --install
+python3 scripts/provision-promo-video-skill.py --scope user --dry-run
+```
+
+User mode installs the shared Codex, OpenCode, and Cursor copy under
+`~/.agents/skills`, the Claude Code copy under `~/.claude/skills`, and the Grok
+copy under `~/.grok/skills`. The provisioner performs a complete conflict
+preflight. It does not overwrite a foreign or modified skill directory. Remove
+only its managed copies with:
+
+```bash
+python3 scripts/provision-promo-video-skill.py --scope user --uninstall
+```
+
+To update the skill, review the new upstream commit and license. Replace the
+vendored files byte-for-byte. Update the commit, complete file list, and all
+hashes in `LOCK.json` in the same change.
+
 ## Ephemeral Coding Sandboxes
 
 The optional stack under [`sandbox/`](sandbox/) keeps tool-heavy agent work out

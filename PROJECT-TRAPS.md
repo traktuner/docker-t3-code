@@ -20,3 +20,4 @@
    `T3_OPENCODE_BINARY_PATH` so an immutable deployment can select the image binary and cannot be
    shadowed by a stale persistent npm installation (`scripts/entrypoint.sh`).
 - Do not classify `GitVcsDriver.fetchRemoteForStatus` errors in the main T3 log as sandbox command failures. T3 polls every registered `/workspace` repository independently, and network-backed Git metadata or an invalid `refs/stash` can make the background fetch fail. Check `.git/locks` older than 1 day, `git fsck --no-dangling`, and `git cat-file -e refs/stash SHA` before assuming network or auth failure. The fix is in `cleanup_stale_git_locks()` (`scripts/entrypoint.sh`, commit `a9af947`).
+- Do not edit byte-exact vendored skill files to satisfy whitespace checks. Add a path-scoped `-whitespace` attribute, and keep the recorded upstream hashes unchanged (`.gitattributes`, `vendor/promo-video-script/LOCK.json`).

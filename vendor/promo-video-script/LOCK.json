@@ -1,0 +1,20 @@
+{
+  "branch": "main",
+  "commit": "0d34d65fb02b29016a25b38c3e1a593731732f76",
+  "files": [
+    {
+      "path": "LICENSE",
+      "sha256": "2b0fdaf5b015e0aa4c5f388b0280315da809c2847d1363a08deb9e9578c4b541"
+    },
+    {
+      "path": "README.md",
+      "sha256": "ce1c3aa5df9031014e443b31e0769c7fa7e1d0b954b0e5f325be2cba9de3cc55"
+    },
+    {
+      "path": "SKILL.md",
+      "sha256": "53c9cf355df25e06f6cea199244ab9fbbc57da3fa76de565312e316bb938f868"
+    }
+  ],
+  "license": "MIT",
+  "repository": "https://github.com/Gnurpreet/promo-video-script-skill"
+}

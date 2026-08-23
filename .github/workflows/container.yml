@@ -160,11 +160,13 @@ jobs:
             sandbox/opensandbox-healthcheck.py \
             scripts/configure-codex-mcp.py \
             scripts/provision-harness-instructions.py \
-            scripts/provision-ste100-policy.py
+            scripts/provision-ste100-policy.py \
+            scripts/provision-promo-video-skill.py
           python3 -m py_compile \
             scripts/configure-codex-mcp.py \
             scripts/provision-harness-instructions.py \
-            scripts/provision-ste100-policy.py
+            scripts/provision-ste100-policy.py \
+            scripts/provision-promo-video-skill.py
           uv run --project sandbox --extra test --frozen pytest -q sandbox/tests
           bash -n \
             scripts/entrypoint.sh scripts/harness-auth.sh scripts/healthcheck.sh \

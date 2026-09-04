@@ -16,16 +16,32 @@
         "lumo-lite": {
           "name": "Lumo Lite",
           "tool_call": true,
+          "temperature": true,
           "attachment": true,
+          "interleaved": { "field": "reasoning_content" },
           "modalities": { "input": ["text", "image"], "output": ["text"] },
-          "limit": { "context": 111072, "output": 16384 }
+          "variants": {
+            "none": { "reasoningEffort": "none" },
+            "medium": { "reasoningEffort": "medium" },
+            "high": { "reasoningEffort": "high" },
+            "max": { "reasoningEffort": "max" }
+          },
+          "limit": { "context": 262144, "output": 16384 }
         },
         "lumo-max": {
           "name": "Lumo Max",
           "tool_call": true,
+          "temperature": true,
           "attachment": true,
+          "interleaved": { "field": "reasoning_content" },
           "modalities": { "input": ["text", "image"], "output": ["text"] },
-          "limit": { "context": 111072, "output": 16384 }
+          "variants": {
+            "none": { "reasoningEffort": "none" },
+            "medium": { "reasoningEffort": "medium" },
+            "high": { "reasoningEffort": "high" },
+            "max": { "reasoningEffort": "max" }
+          },
+          "limit": { "context": 131072, "output": 16384 }
         }
       }
     }

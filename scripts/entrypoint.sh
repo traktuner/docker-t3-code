@@ -622,6 +622,15 @@ if ! /opt/t3-docker/provision-harness-mcp.sh; then
   echo "Warning: failed to provision one or more harness MCP registrations." >&2
 fi
 
+# agent-rack resolves its configuration from HOME-based default paths, and some
+# harnesses (claude) are spawned with a different HOME. Export the exact path
+# globally before any harness process starts so every client resolves the same
+# shared configuration.
+export AGENT_RACK_CONFIG="${AGENT_RACK_CONFIG:-${XDG_CONFIG_HOME:-$HOME/.config}/agent-rack/config.json}"
+if ! /opt/t3-docker/provision-agent-rack.sh; then
+  echo "Warning: failed to provision agent-rack." >&2
+fi
+
 cleanup_stale_git_locks
 configure_git_safe_directories
 

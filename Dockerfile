@@ -176,13 +176,14 @@ COPY scripts/install-provider-clis.sh /opt/t3-docker/install-provider-clis.sh
 ARG CODEX_VERSION=latest
 ARG CLAUDE_VERSION=latest
 ARG OPENCODE_VERSION=latest
+ARG AGENT_RACK_VERSION=0.12.1
 ARG CURSOR_INSTALLER_SHA256=""
 ARG GROK_INSTALLER_SHA256=""
 ARG GROK_VERSION=""
 
 RUN --mount=type=cache,target=/tmp/npm-cache \
     chmod +x /opt/t3-docker/install-provider-clis.sh \
-    && T3_DOCKER_KEEP_NPM_CACHE=1 T3_DOCKER_NPM_CACHE_DIR=/tmp/npm-cache T3_DOCKER_INSTALL_TARGET=providers CODEX_VERSION="${CODEX_VERSION}" CLAUDE_VERSION="${CLAUDE_VERSION}" OPENCODE_VERSION="${OPENCODE_VERSION}" CURSOR_INSTALLER_SHA256="${CURSOR_INSTALLER_SHA256}" GROK_INSTALLER_SHA256="${GROK_INSTALLER_SHA256}" GROK_VERSION="${GROK_VERSION}" /opt/t3-docker/install-provider-clis.sh \
+    && T3_DOCKER_KEEP_NPM_CACHE=1 T3_DOCKER_NPM_CACHE_DIR=/tmp/npm-cache T3_DOCKER_INSTALL_TARGET=providers CODEX_VERSION="${CODEX_VERSION}" CLAUDE_VERSION="${CLAUDE_VERSION}" OPENCODE_VERSION="${OPENCODE_VERSION}" AGENT_RACK_VERSION="${AGENT_RACK_VERSION}" CURSOR_INSTALLER_SHA256="${CURSOR_INSTALLER_SHA256}" GROK_INSTALLER_SHA256="${GROK_INSTALLER_SHA256}" GROK_VERSION="${GROK_VERSION}" /opt/t3-docker/install-provider-clis.sh \
     && chown -R t3:t3 /data
 
 RUN --mount=type=cache,target=/data/npm-cache \
@@ -257,6 +258,8 @@ COPY --chown=t3:t3 scripts/healthcheck.sh /opt/t3-docker/healthcheck.sh
 COPY --chown=t3:t3 scripts/auth-proxy.mjs /opt/t3-docker/auth-proxy.mjs
 COPY --chown=t3:t3 scripts/harness-auth.sh /opt/t3-docker/harness-auth.sh
 COPY --chown=t3:t3 scripts/provision-opencode-mcp.mjs /opt/t3-docker/provision-opencode-mcp.mjs
+COPY --chown=t3:t3 scripts/provision-agent-rack-config.mjs /opt/t3-docker/provision-agent-rack-config.mjs
+COPY --chown=t3:t3 scripts/provision-agent-rack.sh /opt/t3-docker/provision-agent-rack.sh
 COPY --chown=t3:t3 scripts/provision-harness-mcp.sh /opt/t3-docker/provision-harness-mcp.sh
 COPY --chown=t3:t3 scripts/provision-harness-instructions.py /opt/t3-docker/provision-harness-instructions.py
 COPY --chown=t3:t3 scripts/provision-ste100-policy.py /opt/t3-docker/provision-ste100-policy.py
@@ -283,7 +286,7 @@ COPY --chown=t3:t3 vendor/promo-video-script /opt/t3-docker/vendor/promo-video-s
 # Make the message cleanup command executable.
 RUN chmod +x /opt/t3-docker/cleanup-messages.sh
 
-RUN chmod +x /opt/t3-docker/render-config.py /opt/t3-docker/entrypoint.sh /opt/t3-docker/healthcheck.sh /opt/t3-docker/auth-proxy.mjs /opt/t3-docker/harness-auth.sh /opt/t3-docker/provision-opencode-mcp.mjs /opt/t3-docker/provision-harness-mcp.sh /opt/t3-docker/provision-harness-instructions.py /opt/t3-docker/provision-ste100-policy.py /opt/t3-docker/provision-promo-video-skill.py /opt/t3-docker/configure-codex-mcp.py /opt/t3-docker/configure-cursor-mcp.mjs /opt/t3-docker/claude-launcher.sh /opt/t3-docker/t3-sandbox-mcp.mjs /opt/t3-docker/t3-xcode-mcp.mjs /opt/t3-docker/t3-xcode-auth.sh /opt/t3-docker/t3-doctor.sh /opt/t3-docker/github-issue-worker.mjs /opt/t3-docker/github-git-askpass.sh /opt/t3-docker/issue-worker-entrypoint.sh \
+RUN chmod +x /opt/t3-docker/render-config.py /opt/t3-docker/entrypoint.sh /opt/t3-docker/healthcheck.sh /opt/t3-docker/auth-proxy.mjs /opt/t3-docker/harness-auth.sh /opt/t3-docker/provision-opencode-mcp.mjs /opt/t3-docker/provision-agent-rack-config.mjs /opt/t3-docker/provision-agent-rack.sh /opt/t3-docker/provision-harness-mcp.sh /opt/t3-docker/provision-harness-instructions.py /opt/t3-docker/provision-ste100-policy.py /opt/t3-docker/provision-promo-video-skill.py /opt/t3-docker/configure-codex-mcp.py /opt/t3-docker/configure-cursor-mcp.mjs /opt/t3-docker/claude-launcher.sh /opt/t3-docker/t3-sandbox-mcp.mjs /opt/t3-docker/t3-xcode-mcp.mjs /opt/t3-docker/t3-xcode-auth.sh /opt/t3-docker/t3-doctor.sh /opt/t3-docker/github-issue-worker.mjs /opt/t3-docker/github-git-askpass.sh /opt/t3-docker/issue-worker-entrypoint.sh \
     && mkdir -p /opt/t3-docker/runtime-bin \
     && ln -s /opt/t3-docker/claude-launcher.sh /opt/t3-docker/runtime-bin/claude \
     && ln -s /opt/t3-docker/harness-auth.sh /usr/local/bin/t3-auth \

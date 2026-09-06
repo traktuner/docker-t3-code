@@ -171,6 +171,7 @@ jobs:
           bash -n \
             scripts/entrypoint.sh scripts/harness-auth.sh scripts/healthcheck.sh \
             scripts/install-provider-clis.sh scripts/provision-harness-mcp.sh \
+            scripts/provision-agent-rack.sh \
             scripts/t3code-mcp-auth-over-ssh.sh scripts/install-xcode-worker.sh \
             scripts/t3-xcode-auth.sh scripts/t3-xcode-ssh-gate \
             scripts/t3-xcode-worker \
@@ -182,6 +183,7 @@ jobs:
             scripts/configure-cursor-mcp.mjs \
             scripts/cursor-sandbox-wrapper.mjs \
             scripts/provision-opencode-mcp.mjs \
+            scripts/provision-agent-rack-config.mjs \
             scripts/t3-sandbox-mcp.mjs scripts/t3-xcode-mcp.mjs \
             scripts/github-issue-worker-lib.mjs scripts/github-issue-worker.mjs \
             scripts/t3-sandbox-only-plugin.js
@@ -365,6 +367,7 @@ jobs:
           echo "codex_version=$(npm view @openai/codex version)" >> "$GITHUB_OUTPUT"
           echo "claude_version=$(npm view @anthropic-ai/claude-code version)" >> "$GITHUB_OUTPUT"
           echo "opencode_version=$(npm view opencode-ai version)" >> "$GITHUB_OUTPUT"
+          echo "agent_rack_version=$(npm view agent-rack version)" >> "$GITHUB_OUTPUT"
           echo "mcp_sdk_version=$(npm view @modelcontextprotocol/sdk version)" >> "$GITHUB_OUTPUT"
           echo "zod_version=$(npm view zod version)" >> "$GITHUB_OUTPUT"
           echo "npm_version=$(npm view npm version)" >> "$GITHUB_OUTPUT"
@@ -517,6 +520,7 @@ jobs:
             CODEX_VERSION=${{ steps.version.outputs.codex_version }}
             CLAUDE_VERSION=${{ steps.version.outputs.claude_version }}
             OPENCODE_VERSION=${{ steps.version.outputs.opencode_version }}
+            AGENT_RACK_VERSION=${{ steps.version.outputs.agent_rack_version }}
             CURSOR_INSTALLER_SHA256=${{ steps.version.outputs.cursor_installer_sha256 }}
             GROK_INSTALLER_SHA256=${{ steps.version.outputs.grok_installer_sha256 }}
             GROK_VERSION=${{ steps.version.outputs.grok_version }}

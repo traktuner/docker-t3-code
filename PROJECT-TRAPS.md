@@ -21,3 +21,16 @@
    shadowed by a stale persistent npm installation (`scripts/entrypoint.sh`).
 - Do not classify `GitVcsDriver.fetchRemoteForStatus` errors in the main T3 log as sandbox command failures. T3 polls every registered `/workspace` repository independently, and network-backed Git metadata or an invalid `refs/stash` can make the background fetch fail. Check `.git/locks` older than 1 day, `git fsck --no-dangling`, and `git cat-file -e refs/stash SHA` before assuming network or auth failure. The fix is in `cleanup_stale_git_locks()` (`scripts/entrypoint.sh`, commit `a9af947`).
 - Do not edit byte-exact vendored skill files to satisfy whitespace checks. Add a path-scoped `-whitespace` attribute, and keep the recorded upstream hashes unchanged (`.gitattributes`, `vendor/promo-video-script/LOCK.json`).
+- Do not assume agent-rack's two home boundaries behave alike in the t3code container. Stock
+  `agent-rack install --target codex` resolves the config home via the codex CLI, so it honors
+  `CODEX_HOME=/data/codex` (verified: registration lands in `$CODEX_HOME/config.toml`), while
+  stock `agent-rack cp --target codex` ignores `CODEX_HOME` and writes `$HOME/.codex/skills`,
+  and stock `agent-rack install --target opencode` always writes `$XDG_CONFIG_HOME/opencode/opencode.json`.
+  Share one config file through the globally exported `AGENT_RACK_CONFIG` and copy claude's
+  config copy inside `HOME=/data/claude-home`; never rely on default-path resolution across
+  different harness HOMEs (`scripts/provision-agent-rack.sh`, `scripts/entrypoint.sh`).
+- Do not let a provisioning script silently skip because a probe command always exits 0:
+  `opencode mcp list` exits 0 even with zero servers, so registration probes must check output
+  (`opencode mcp list | grep -q agent-rack`), not the exit code, while `codex mcp get agent-rack`
+  and `claude mcp get agent-rack` do exit nonzero when the server is missing
+  (`scripts/provision-agent-rack.sh`).

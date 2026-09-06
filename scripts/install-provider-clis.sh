@@ -27,6 +27,10 @@ install_t3_cli() {
   install_npm_packages "t3@${T3_VERSION:-latest}"
 }
 
+install_agent_rack() {
+  install_npm_packages "agent-rack@${AGENT_RACK_VERSION:-latest}"
+}
+
 install_npm_provider_clis() {
   install_npm_packages \
     "@openai/codex@${CODEX_VERSION:-latest}" \
@@ -99,12 +103,14 @@ case "${T3_DOCKER_INSTALL_TARGET:-all}" in
     install_npm_provider_clis
     install_cursor_agent
     install_grok_build
+    install_agent_rack
     ;;
   all)
     install_npm_provider_clis
     install_cursor_agent
     install_grok_build
     install_t3_cli
+    install_agent_rack
     ;;
   *)
     echo "T3_DOCKER_INSTALL_TARGET must be one of: all, providers, t3" >&2

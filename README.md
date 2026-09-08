@@ -2,6 +2,27 @@
 
 This container runs the official T3 Code headless server. All T3 Code upstream provider CLIs are baked into the image: Codex, Claude Code, Cursor Agent, Grok Build, and OpenCode. The image also includes common agentic-coding tools such as `git`, `gh`, `ssh`, `rg`, `fd`, `jq`, `yq`, `uv`, `bun`, `pnpm`, `yarn`, `prettier`, `typescript`, `shellcheck`, `sqlite3`, `psql`, `mysql`, `redis-cli`, `lsof`, and `strace`.
 
+## Authenticated GitHub control plane
+
+The main T3 container is the only place that holds the normal `gh` login. A
+coding sandbox contains the `gh` binary but deliberately has no GitHub
+credential. This avoids handing a reusable GitHub token to code or prompts that
+run in a disposable sandbox.
+
+Every enabled harness receives a local `t3-github` MCP server by default. It
+does not expose a host shell or a generic `gh` passthrough. Instead it provides
+credential-safe operations for the active repository below `T3_WORKDIR`:
+
+- `github_auth_status`
+- `github_actions_list`, `github_actions_watch`, and `github_actions_failed_log`
+- `github_push_current_branch` (only after explicit user authorization; origin,
+  current branch, no force, no delete)
+
+The tool never returns a token and rejects repositories outside the active
+workspace or origins not on `GH_HOST`. Set `T3_GITHUB_MCP_ENABLED=0` only to
+disable this managed control-plane MCP deliberately. Agents must use these tools
+instead of trying to authenticate a sandbox or falling back to the host shell.
+
 ## What It Does
 
 - Starts the pinned `/usr/local/bin/t3` exclusively as the official `t3 serve --mode web` server.

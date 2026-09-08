@@ -34,3 +34,8 @@
   (`opencode mcp list | grep -q agent-rack`), not the exit code, while `codex mcp get agent-rack`
   and `claude mcp get agent-rack` do exit nonzero when the server is missing
   (`scripts/provision-agent-rack.sh`).
+- Do not give a coding sandbox a GitHub login or tell an agent to use the control-container shell
+  for GitHub work. Sandboxes deliberately lack credentials; use the bounded `t3-github` MCP for
+  user-authorized current-branch pushes and Actions inspection/watch/logs, so the token stays in
+  the control container and agents have one explicit route (`scripts/t3-github-mcp.mjs`,
+  `scripts/t3-sandbox-instructions.md`).

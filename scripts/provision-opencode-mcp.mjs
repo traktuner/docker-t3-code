@@ -8,7 +8,7 @@ if (!configPath) {
   process.exit(2);
 }
 const reconcileManaged = (process.env.T3_SANDBOX_MCP_RECONCILE || "1") === "1";
-const managedMcpNames = ["t3-sandbox", "xcodebuild"];
+const managedMcpNames = ["t3-sandbox", "t3-github", "xcodebuild"];
 const sandboxInstructionsFile = (
   process.env.T3_OPENCODE_SANDBOX_INSTRUCTIONS_FILE || ""
 ).trim();
@@ -251,6 +251,18 @@ function xcodePreset() {
   };
 }
 
+function githubControlPreset() {
+  if ((process.env.T3_GITHUB_MCP_ENABLED || "1") !== "1") return {};
+  return {
+    "t3-github": {
+      type: "local",
+      command: ["t3-github-mcp"],
+      enabled: true,
+      timeout: 3700000,
+    },
+  };
+}
+
 function addPresetEntries(target) {
   const raw = (process.env.T3_OPENCODE_MCP_PRESETS || "").trim();
   if (!raw) return;
@@ -364,9 +376,11 @@ function desiredMcpServers() {
   if (reconcileManaged) {
     for (const name of managedMcpNames) desired.delete(name);
     addObjectEntries(desired, sandboxPreset());
+    addObjectEntries(desired, githubControlPreset());
     addObjectEntries(desired, xcodePreset());
   } else {
     addMissingEntries(desired, sandboxPreset());
+    addMissingEntries(desired, githubControlPreset());
     addMissingEntries(desired, xcodePreset());
   }
 
@@ -676,7 +690,7 @@ function reconcileManagedEntries(input, desired) {
     if (!property) return [];
     const value = desired.get(name) || {
       type: "local",
-      command: [name === "t3-sandbox" ? "t3-sandbox-mcp" : "t3-xcode-mcp"],
+      command: [name === "t3-sandbox" ? "t3-sandbox-mcp" : name === "t3-github" ? "t3-github-mcp" : "t3-xcode-mcp"],
       enabled: false,
     };
     return [{ ...property, value: renderEntryValue(value) }];
@@ -723,6 +737,7 @@ if (sandboxOnly) {
         },
       ],
       ["t3-sandbox_*", "allow"],
+      ["t3-github_*", "allow"],
       ["xcodebuild_*", "allow"],
     ]),
   );

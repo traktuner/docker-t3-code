@@ -22,6 +22,7 @@ test("provisions global sandbox instructions and strict local-tool permissions i
     T3_OPENCODE_CLOUDFLARE_MCP: "off",
     T3_OPENCODE_MCP_PRESETS: "",
     T3_SANDBOX_MCP_RECONCILE: "0",
+    T3_GITHUB_MCP_ENABLED: "1",
     T3_OPENCODE_SANDBOX_INSTRUCTIONS_FILE: "/config/t3-sandbox-instructions.md",
     T3_OPENCODE_SANDBOX_ONLY: "1",
   };
@@ -47,7 +48,14 @@ test("provisions global sandbox instructions and strict local-tool permissions i
     general: "allow",
   });
   assert.equal(parsed.permission["t3-sandbox_*"], "allow");
+  assert.equal(parsed.permission["t3-github_*"], "allow");
   assert.equal(parsed.permission["xcodebuild_*"], "allow");
+  assert.deepEqual(parsed.mcp["t3-github"], {
+    type: "local",
+    command: ["t3-github-mcp"],
+    enabled: true,
+    timeout: 3700000,
+  });
 });
 
 test("provisions the GitHub MCP with an environment reference, never the token value", () => {

@@ -38,6 +38,28 @@ For every repository task:
    perform it through the repository-approved workflow; do not incorrectly claim
    that this managed sandbox policy itself forbids an authorized operation.
 
+## GitHub control-plane operations
+
+`gh` is installed in a sandbox for unauthenticated syntax and local tooling only.
+The sandbox has no GitHub login and must never receive one.
+
+For every authenticated GitHub operation, use `t3-github` immediately. This is
+the complete operating rule:
+
+1. The user explicitly authorizes a push: call `github_push_current_branch`.
+2. A workflow run ID is known: call `github_actions_watch` with that ID.
+3. A run must be identified first: call `github_actions_list`, then watch its
+   returned `databaseId` with `github_actions_watch`.
+4. The watched run fails: call `github_actions_failed_log` once for its log.
+5. Authentication itself is in doubt: call `github_auth_status` once.
+
+Never run `gh`, `git push`, `gh run watch`, or `gh auth login` in the sandbox.
+Never try a host shell, copy credentials, add a token, or claim that the sandbox
+policy forbids an explicitly user-authorized push. `t3-github` executes only
+these fixed GitHub/Git commands in the control container, only for the active
+workspace repository, and never returns a credential. If a `t3-github` call
+fails, report that result; do not probe alternate credentials or execution paths.
+
 Remote MCP servers may still be used for their intended external services.
 Never expose model, provider, GitHub, or other host credentials inside a coding
 sandbox unless the deployment explicitly provides a scoped credential.

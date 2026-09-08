@@ -11,6 +11,9 @@ const desired = {};
 if (process.env.T3_SANDBOX_URL && process.env.T3_SANDBOX_TOKEN) {
   desired["t3-sandbox"] = { command: "t3-sandbox-mcp", args: [] };
 }
+if ((process.env.T3_GITHUB_MCP_ENABLED || "1") === "1") {
+  desired["t3-github"] = { command: "t3-github-mcp", args: [] };
+}
 if (process.env.T3_XCODE_SSH_HOST && process.env.T3_XCODE_REMOTE_WORKSPACE_ROOT) {
   desired.xcodebuild = { command: "t3-xcode-mcp", args: [] };
 }
@@ -32,6 +35,7 @@ if (!config.mcpServers || typeof config.mcpServers !== "object") {
 
 if (reconcile) {
   delete config.mcpServers["t3-sandbox"];
+  delete config.mcpServers["t3-github"];
   delete config.mcpServers.xcodebuild;
 }
 Object.assign(config.mcpServers, desired);

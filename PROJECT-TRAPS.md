@@ -42,3 +42,5 @@
   Git HTTPS: the control-container startup must run `gh auth setup-git`, and the bounded MCP push
   must terminate its child process after a fixed timeout (`scripts/entrypoint.sh`,
   `scripts/t3-github-mcp.mjs`).
+
+- Do not send result-dependent work through stock `agent_session_create`: it is detached, cannot wake a completed parent turn, and `SessionManager.shutdown()` cancels its child processes on an OpenCode/agent-rack restart. Keep the parent inside `agent_run`/the version-gated `agent_run_parallel` join; provision the canonical patch before MCP registration and fail closed if it cannot apply (`scripts/provision-agent-rack.sh`, `scripts/entrypoint.sh`).

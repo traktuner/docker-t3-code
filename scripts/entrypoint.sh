@@ -640,7 +640,8 @@ fi
 # shared configuration.
 export AGENT_RACK_CONFIG="${AGENT_RACK_CONFIG:-${XDG_CONFIG_HOME:-$HOME/.config}/agent-rack/config.json}"
 if ! /opt/t3-docker/provision-agent-rack.sh; then
-  echo "Warning: failed to provision agent-rack." >&2
+  echo "Error: failed to provision required agent-rack harness controls." >&2
+  exit 1
 fi
 
 cleanup_stale_git_locks

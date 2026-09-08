@@ -19,6 +19,20 @@ if ! /opt/t3-docker/provision-agent-rack-config.mjs "$config_path"; then
   exit 0
 fi
 
+# The canonical policy asset is mounted by the infra pre-deploy role. It
+# patches exactly agent-rack@0.12.1 to add the synchronous parallel join tool
+# and makes detached-session no-callback semantics explicit. The image grants
+# the t3 user write access only to this one installed source file.
+join_patcher="$(dirname "$config_path")/agent-rack-join-patch.mjs"
+if [[ ! -f "$join_patcher" ]]; then
+  warn "agent-rack join patch is missing: $join_patcher"
+  exit 1
+fi
+if ! node "$join_patcher"; then
+  warn "could not apply the agent-rack synchronous parallel join patch."
+  exit 1
+fi
+
 if ! agent-rack config-check -c "$config_path"; then
   warn "the agent-rack configuration at $config_path failed validation."
 fi

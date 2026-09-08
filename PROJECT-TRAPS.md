@@ -38,4 +38,7 @@
   for GitHub work. Sandboxes deliberately lack credentials; use the bounded `t3-github` MCP for
   user-authorized current-branch pushes and Actions inspection/watch/logs, so the token stays in
   the control container and agents have one explicit route (`scripts/t3-github-mcp.mjs`,
-  `scripts/t3-sandbox-instructions.md`).
+  `scripts/t3-sandbox-instructions.md`). A successful `gh auth status` alone does not configure
+  Git HTTPS: the control-container startup must run `gh auth setup-git`, and the bounded MCP push
+  must terminate its child process after a fixed timeout (`scripts/entrypoint.sh`,
+  `scripts/t3-github-mcp.mjs`).

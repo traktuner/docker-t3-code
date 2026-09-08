@@ -4,7 +4,8 @@ This container runs the official T3 Code headless server. All T3 Code upstream p
 
 ## Authenticated GitHub control plane
 
-The main T3 container is the only place that holds the normal `gh` login. A
+The main T3 container is the only place that holds the normal `gh` login. At
+startup it configures that persisted login as Git's HTTPS credential helper. A
 coding sandbox contains the `gh` binary but deliberately has no GitHub
 credential. This avoids handing a reusable GitHub token to code or prompts that
 run in a disposable sandbox.

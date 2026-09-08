@@ -22,7 +22,21 @@ test("exposes only bounded GitHub control-plane operations", () => {
     source.includes('["push", "--porcelain", "origin", `HEAD:refs/heads/${name}`]'),
     "the push must use the fixed origin/current-branch refspec",
   );
+  assert.match(source, /const gitPushTimeoutMs = 120_000/);
+  assert.match(source, /timeoutMs: gitPushTimeoutMs/);
+  assert.match(source, /timed_out: timedOut/);
   assert.match(source, /Force-pushes, branch deletion, arbitrary remotes, and arbitrary refspecs are not supported/);
+});
+
+test("configures Git HTTPS only in the authenticated control container", () => {
+  const entrypoint = fs.readFileSync(path.join(root, "scripts", "entrypoint.sh"), "utf8");
+
+  assert.match(entrypoint, /configure_github_git_credential_helper\(\)/);
+  assert.match(entrypoint, /gh auth setup-git --hostname "\$gh_host"/);
+  assert.ok(
+    entrypoint.indexOf("configure_github_git_credential_helper\nhydrate_github_auth_for_opencode") >= 0,
+    "Git credential helper setup must run before optional OpenCode token hydration",
+  );
 });
 
 test("keeps authenticated commands inside the active workspace repository", () => {

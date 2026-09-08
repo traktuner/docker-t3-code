@@ -9,6 +9,7 @@ import { z } from "zod";
 const workspaceRoot = process.env.T3_GITHUB_MCP_WORKSPACE_ROOT || process.env.T3_WORKDIR || "/workspace";
 const githubHost = (process.env.GH_HOST || "github.com").trim();
 const maxOutputBytes = 1_000_000;
+const gitPushTimeoutMs = 120_000;
 
 if (!/^[A-Za-z0-9.-]+$/.test(githubHost)) {
   throw new Error("GH_HOST must contain only a hostname");
@@ -53,7 +54,7 @@ function boundedCollector() {
   };
 }
 
-function run(command, args, { cwd, signal } = {}) {
+function run(command, args, { cwd, signal, timeoutMs } = {}) {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {
       cwd,
@@ -63,16 +64,31 @@ function run(command, args, { cwd, signal } = {}) {
     const stdout = boundedCollector();
     const stderr = boundedCollector();
     let settled = false;
+    let timedOut = false;
+    let timeout;
 
     const finish = (value) => {
       if (settled) return;
       settled = true;
+      if (timeout) clearTimeout(timeout);
       signal?.removeEventListener("abort", abort);
       resolve(value);
     };
     const abort = () => child.kill("SIGTERM");
     signal?.addEventListener("abort", abort, { once: true });
-    child.once("error", reject);
+    if (Number.isInteger(timeoutMs) && timeoutMs > 0) {
+      timeout = setTimeout(() => {
+        timedOut = true;
+        abort();
+      }, timeoutMs);
+    }
+    child.once("error", (error) => {
+      if (settled) return;
+      settled = true;
+      if (timeout) clearTimeout(timeout);
+      signal?.removeEventListener("abort", abort);
+      reject(error);
+    });
     child.stdout.on("data", (chunk) => stdout.append(chunk));
     child.stderr.on("data", (chunk) => stderr.append(chunk));
     child.once("close", (exitCode, terminationSignal) =>
@@ -82,6 +98,7 @@ function run(command, args, { cwd, signal } = {}) {
         stdout: stdout.text(),
         stderr: stderr.text(),
         output_truncated: stdout.truncated || stderr.truncated,
+        timed_out: timedOut,
       }),
     );
   });
@@ -254,6 +271,7 @@ server.registerTool(
         ...(await run("git", ["push", "--porcelain", "origin", `HEAD:refs/heads/${name}`], {
           cwd: repositoryRoot,
           signal: extra.signal,
+          timeoutMs: gitPushTimeoutMs,
         })),
       });
     } catch (error) {

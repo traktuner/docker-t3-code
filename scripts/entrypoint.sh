@@ -78,6 +78,17 @@ configure_git_safe_directories() {
   )
 }
 
+configure_github_git_credential_helper() {
+  local gh_host
+
+  command -v gh >/dev/null 2>&1 || return 0
+  gh_host="${GH_HOST:-${GITHUB_HOST:-github.com}}"
+  if gh auth status --hostname "$gh_host" >/dev/null 2>&1; then
+    gh auth setup-git --hostname "$gh_host" >/dev/null
+    echo "Configured the persisted gh login as the Git credential helper."
+  fi
+}
+
 hydrate_github_auth_for_opencode() {
   local presets="${T3_OPENCODE_MCP_PRESETS:-}"
   local gh_host token
@@ -562,6 +573,7 @@ run_t3_headless() {
   wait_for_supervised_processes "${supervised_pids[@]}"
 }
 
+configure_github_git_credential_helper
 hydrate_github_auth_for_opencode
 provision_provider_config_dirs
 provision_ste100_policy

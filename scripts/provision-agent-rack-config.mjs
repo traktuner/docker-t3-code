@@ -46,18 +46,23 @@ function positiveInteger(envName, fallback) {
   return Number.parseInt(raw, 10);
 }
 
-function allowedWorkspaces() {
+function allowedWorkspaces(existing) {
   const raw = (process.env.T3_AGENT_RACK_ALLOWED_WORKSPACES || "").trim();
   if (raw) {
     return raw.split(",").map((item) => item.trim()).filter(Boolean);
   }
+  if (Array.isArray(existing.allowedWorkspaces)
+      && existing.allowedWorkspaces.length > 0
+      && existing.allowedWorkspaces.every((item) => typeof item === "string" && item.trim())) {
+    return existing.allowedWorkspaces;
+  }
   return [(process.env.T3_WORKDIR || "/workspace").trim() || "/workspace"];
 }
 
-function desiredConfig() {
+function desiredConfig(existing) {
   return {
     transport: "stdio",
-    allowedWorkspaces: allowedWorkspaces(),
+    allowedWorkspaces: allowedWorkspaces(existing),
     security: {
       executionPolicy: "workspace-write",
       sanitizeEnv: true,
@@ -94,7 +99,7 @@ function loadExisting() {
 }
 
 const config = loadExisting();
-const desired = desiredConfig();
+const desired = desiredConfig(config);
 
 for (const [key, value] of Object.entries(desired)) {
   if (key === "security") {

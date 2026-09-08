@@ -1,5 +1,12 @@
 # Project Traps
 
+- Do not let `provision-agent-rack-config.mjs` replace a deployed canonical
+  `allowedWorkspaces` list with its `/workspace` fallback. The provisioner runs
+  at every T3 start, so an omitted environment value used to block Mac SMB
+  audit repos despite a correct mounted policy file. Preserve a valid existing
+  list unless `T3_AGENT_RACK_ALLOWED_WORKSPACES` explicitly supplies an
+  override (`scripts/provision-agent-rack-config.mjs`).
+
 - Invoke sandbox tests as `uv run --project sandbox --extra test --frozen python -m pytest -q sandbox/tests` when reusing a moved checkout; an existing `sandbox/.venv/bin/pytest` can retain its old absolute Python shebang and otherwise run the system interpreter without `t3_sandbox_gateway` (`sandbox/.venv/bin/pytest`). Run Ruff with the CI's explicit `--config sandbox/pyproject.toml` as well: root-level config discovery classifies first-party test imports differently and can pass locally before CI rejects the same import block.
 - Do not emulate Electron browser trust with a user-agent, mode flag, or retained 24-hour desktop bootstrap token: official headless T3 always requires a session, while Electron receives a privileged bootstrap grant out of band. Use the short-lived container-local control-plane exchange in `scripts/auth-proxy.mjs`, preserve T3's normal browser cookie, and keep the revoked-session recovery test in `tests/auth-proxy.test.mjs`.
 - Do not assume native harness MCP subprocesses inherit the parent T3 environment: Codex can sanitize custom variables before starting `t3-sandbox-mcp`, which closes the initialize handshake when URL or token is absent. The bridge must default to the internal gateway and read the mounted token file itself; MCP `structuredContent` must also remain a record, never a top-level array (`scripts/t3-sandbox-mcp.mjs`).

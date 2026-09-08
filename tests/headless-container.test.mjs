@@ -86,6 +86,12 @@ test("keeps the repository T3 pin synchronized", () => {
   assert.doesNotMatch(read("config/t3code.example.toml"), /^\[auth\]$/m);
 });
 
+test("bounds healthcheck HTTP probes so CI startup polling cannot hang", () => {
+  const healthcheck = read("scripts/healthcheck.sh");
+
+  assert.equal((healthcheck.match(/--connect-timeout 2 --max-time 5 -fsS/g) || []).length, 2);
+});
+
 test("starts the sandbox MCP from sanitized harness environments", () => {
   const bridge = read("scripts/t3-sandbox-mcp.mjs");
 

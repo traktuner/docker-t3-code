@@ -68,6 +68,7 @@ test("reconciles the shared Onyx rule into harness-native roots", () => {
   const claudeHome = path.join(directory, "claude");
   const grokHome = path.join(directory, "grok");
   const opencodeConfig = path.join(directory, "opencode");
+  const claudeSettingsPath = path.join(claudeHome, ".claude", "settings.json");
   fs.mkdirSync(codexHome, { recursive: true });
   fs.mkdirSync(claudeHome, { recursive: true });
   fs.mkdirSync(grokHome, { recursive: true });
@@ -76,6 +77,19 @@ test("reconciles the shared Onyx rule into harness-native roots", () => {
   fs.writeFileSync(path.join(codexHome, "AGENTS.md"), "# Existing Codex rule\n");
   fs.mkdirSync(path.join(claudeHome, ".claude"), { recursive: true });
   fs.writeFileSync(path.join(claudeHome, ".claude", "CLAUDE.md"), "# Existing Claude rule\n");
+  fs.writeFileSync(
+    claudeSettingsPath,
+    JSON.stringify(
+      {
+        hooks: {
+          SessionStart: [{ hooks: [{ type: "command", command: "node /Users/container-only/hooks/session-start.js" }] }],
+          PostToolUse: [{ hooks: [{ type: "command", command: "node /usr/local/bin/container-hook.js" }] }],
+        },
+      },
+      null,
+      2,
+    ),
+  );
   fs.writeFileSync(path.join(opencodeConfig, "AGENTS.md"), "# Existing OpenCode rule with Onyx\n");
 
   const environment = {
@@ -87,6 +101,7 @@ test("reconciles the shared Onyx rule into harness-native roots", () => {
     T3_HARNESS_SANDBOX_INSTRUCTIONS_FILE: onyxPolicyPath,
     T3_HARNESS_SANDBOX_INSTRUCTIONS: "0",
     T3_HARNESS_ONYX_INSTRUCTIONS_FILE: onyxPolicyPath,
+    T3_CLAUDE_SANITIZE_HOST_HOOKS: "1",
     T3_PROVIDER_CODEX: "1",
     T3_PROVIDER_CLAUDE: "1",
     T3_PROVIDER_GROK: "1",
@@ -105,6 +120,9 @@ test("reconciles the shared Onyx rule into harness-native roots", () => {
   }
   assert.match(opencode, /Existing OpenCode rule with Onyx/);
   assert.doesNotMatch(opencode, /t3-docker:onyx-policy:start/);
+  const claudeSettings = JSON.parse(fs.readFileSync(claudeSettingsPath, "utf8"));
+  assert.equal(claudeSettings.hooks.SessionStart, undefined);
+  assert.equal(claudeSettings.hooks.PostToolUse[0].hooks[0].command, "node /usr/local/bin/container-hook.js");
 
   execFileSync("python3", [provisioner], { env: environment });
   assert.equal(fs.readFileSync(path.join(codexHome, "AGENTS.md"), "utf8"), codex);

@@ -324,6 +324,8 @@ preserved outside a marked managed block. Set
 When `/config/onyx-context.md` is present, startup also reconciles its managed
 Onyx rule into each enabled native root. Existing unmarked Onyx content remains
 untouched.
+The same startup pass removes unavailable absolute `/Users/...` commands from
+the writable Claude hook configuration. Valid container-local hooks remain.
 Set
 `T3_OPENCODE_SANDBOX_ONLY=1` to deny OpenCode's local filesystem, shell, edit,
 and subagent tools while keeping sandbox, Xcode, and independently configured

@@ -56,4 +56,6 @@
 
 - Do not assume the provider config source contains the shared Onyx root rule. Reconcile `/config/onyx-context.md` into each enabled harness-native root at startup, while preserving existing unmarked content; otherwise stale Codex and Claude `AGENTS.md`/`CLAUDE.md` files can run without the mandatory Onyx workflow (`scripts/provision-harness-instructions.py`).
 
+- Do not treat Mac-only Claude hook paths as portable container configuration. After provider sync, remove unavailable absolute `/Users/...` hook commands from the writable Claude settings copy; otherwise every CLI probe can report non-blocking SessionStart or SessionEnd errors even when MCP servers are healthy (`scripts/provision-harness-instructions.py`).
+
 - Do not vendor the versioned agent-rack join patch into `docker-t3-code`. Infra owns that single source of truth and mounts it before production startup; the isolated image-only CI runtime probe has no policy volume and must set `T3_AGENT_RACK=0`, while Ansible post-deploy verifies the enabled production path (`.github/workflows/container.yml`, `stacks/t3code/pre_deploy.yml`).

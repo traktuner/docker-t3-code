@@ -3,8 +3,10 @@
 
 from __future__ import annotations
 
+import json
 import os
 import re
+import shlex
 import stat
 import tempfile
 from pathlib import Path
@@ -21,6 +23,72 @@ def enabled(name: str, default: str = "1") -> bool:
 
 def provider_enabled(name: str) -> bool:
     return enabled(f"T3_PROVIDER_{name}")
+
+
+def sanitize_claude_hooks(path: Path) -> None:
+    if not path.is_file() or not enabled("T3_CLAUDE_SANITIZE_HOST_HOOKS"):
+        return
+
+    try:
+        settings = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return
+    if not isinstance(settings, dict) or not isinstance(settings.get("hooks"), dict):
+        return
+
+    changed = False
+    reconciled_events = {}
+    for event, groups in settings["hooks"].items():
+        if not isinstance(groups, list):
+            reconciled_events[event] = groups
+            continue
+
+        reconciled_groups = []
+        for group in groups:
+            if not isinstance(group, dict) or not isinstance(group.get("hooks"), list):
+                reconciled_groups.append(group)
+                continue
+
+            reconciled_hooks = []
+            for hook in group["hooks"]:
+                command = hook.get("command") if isinstance(hook, dict) else None
+                try:
+                    tokens = shlex.split(command) if isinstance(command, str) else []
+                except ValueError:
+                    tokens = []
+                unavailable_host_hook = any(
+                    token.startswith("/Users/") and not Path(token).is_file() for token in tokens
+                )
+                if unavailable_host_hook:
+                    changed = True
+                    continue
+                reconciled_hooks.append(hook)
+
+            if reconciled_hooks:
+                reconciled_groups.append({**group, "hooks": reconciled_hooks})
+            else:
+                changed = True
+
+        if reconciled_groups:
+            reconciled_events[event] = reconciled_groups
+        elif groups:
+            changed = True
+
+    if not changed:
+        return
+
+    settings["hooks"] = reconciled_events
+    mode = stat.S_IMODE(path.stat().st_mode)
+    handle, temporary_name = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
+    temporary = Path(temporary_name)
+    try:
+        with os.fdopen(handle, "w", encoding="utf-8") as output:
+            json.dump(settings, output, ensure_ascii=False, indent=2)
+            output.write("\n")
+        os.chmod(temporary, mode)
+        os.replace(temporary, path)
+    finally:
+        temporary.unlink(missing_ok=True)
 
 
 def reconcile_file(
@@ -117,6 +185,12 @@ def main() -> None:
 
     for provider, target in targets:
         reconcile_file(target, policy, active and provider_enabled(provider))
+
+    sanitize_claude_hooks(
+        Path(os.environ.get("T3_CLAUDE_HOME_PATH", "/data/claude-home"))
+        / ".claude"
+        / "settings.json"
+    )
 
     onyx_policy_path = Path(
         os.environ.get("T3_HARNESS_ONYX_INSTRUCTIONS_FILE", "/config/onyx-context.md")

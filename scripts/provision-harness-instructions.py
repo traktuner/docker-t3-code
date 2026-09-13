@@ -105,7 +105,10 @@ def main() -> None:
             Path(
                 os.environ.get(
                     "OPENCODE_CONFIG_DIR",
-                    str(Path(os.environ.get("XDG_CONFIG_HOME", str(home / ".config"))) / "opencode"),
+                    str(
+                        Path(os.environ.get("XDG_CONFIG_HOME", str(home / ".config")))
+                        / "opencode"
+                    ),
                 )
             )
             / "AGENTS.md",
@@ -127,7 +130,12 @@ def main() -> None:
                     if target.exists()
                     else ""
                 )
-                if "onyx" in existing.lower() and ONYX_START not in existing and ONYX_END not in existing:
+                has_unmanaged_onyx = (
+                    "onyx" in existing.lower()
+                    and ONYX_START not in existing
+                    and ONYX_END not in existing
+                )
+                if has_unmanaged_onyx:
                     continue
             reconcile_file(
                 target,

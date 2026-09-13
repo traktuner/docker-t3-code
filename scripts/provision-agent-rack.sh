@@ -8,6 +8,16 @@ if ! command -v agent-rack >/dev/null 2>&1; then
   exit 0
 fi
 
+claude_binary="${T3_CLAUDE_BINARY_PATH:-claude}"
+if [[ "$claude_binary" != */* ]]; then
+  claude_binary="$(command -v "$claude_binary" || true)"
+fi
+if [[ -z "$claude_binary" || ! -x "$claude_binary" ]]; then
+  warn="Claude Code is not executable; skipping Claude agent-rack provisioning."
+  echo "Warning: $warn" >&2
+  claude_binary=""
+fi
+
 config_path="${AGENT_RACK_CONFIG:-${XDG_CONFIG_HOME:-$HOME/.config}/agent-rack/config.json}"
 
 warn() {
@@ -69,7 +79,7 @@ fi
 # stock installer must run inside that HOME to target the same user scope.
 claude_home="${T3_CLAUDE_HOME_PATH:-/data/claude-home}"
 mkdir -p "$claude_home"
-if ! HOME="$claude_home" claude mcp get agent-rack >/dev/null 2>&1; then
+if [[ -n "$claude_binary" ]] && ! HOME="$claude_home" "$claude_binary" mcp get agent-rack >/dev/null 2>&1; then
   output="$(HOME="$claude_home" agent-rack install --target claude --scope user 2>&1)" && status=0 || status=$?
   if [[ "$status" -ne 0 ]] && ! grep -qi "already exist" <<<"$output"; then
     warn "could not register agent-rack with Claude Code."

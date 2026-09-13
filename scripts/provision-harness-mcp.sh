@@ -51,33 +51,38 @@ provision_codex() {
 
 provision_claude() {
   [[ "${T3_PROVIDER_CLAUDE:-1}" == "1" ]] || return 0
-  command -v claude >/dev/null 2>&1 || return 0
+
+  local claude_binary="${T3_CLAUDE_BINARY_PATH:-claude}"
+  if [[ "$claude_binary" != */* ]]; then
+    claude_binary="$(command -v "$claude_binary" || true)"
+  fi
+  [[ -n "$claude_binary" && -x "$claude_binary" ]] || return 0
 
   local claude_home="${T3_CLAUDE_HOME_PATH:-/data/claude-home}"
   mkdir -p "$claude_home"
   if [[ "$reconcile" == "1" ]]; then
-    HOME="$claude_home" claude mcp remove --scope user t3-sandbox >/dev/null 2>&1 || true
-    HOME="$claude_home" claude mcp remove --scope user t3-github >/dev/null 2>&1 || true
-    HOME="$claude_home" claude mcp remove --scope user xcodebuild >/dev/null 2>&1 || true
+    HOME="$claude_home" "$claude_binary" mcp remove --scope user t3-sandbox >/dev/null 2>&1 || true
+    HOME="$claude_home" "$claude_binary" mcp remove --scope user t3-github >/dev/null 2>&1 || true
+    HOME="$claude_home" "$claude_binary" mcp remove --scope user xcodebuild >/dev/null 2>&1 || true
   fi
 
   if [[ "$github_enabled" == "1" ]]; then
-    if ! HOME="$claude_home" claude mcp get t3-github >/dev/null 2>&1 \
-      && ! HOME="$claude_home" claude mcp add --scope user t3-github -- t3-github-mcp >/dev/null; then
+    if ! HOME="$claude_home" "$claude_binary" mcp get t3-github >/dev/null 2>&1 \
+      && ! HOME="$claude_home" "$claude_binary" mcp add --scope user t3-github -- t3-github-mcp >/dev/null; then
       echo "Warning: could not register GitHub control MCP in Claude Code." >&2
     fi
   fi
 
   if [[ "$sandbox_enabled" == "1" ]]; then
-    if ! HOME="$claude_home" claude mcp get t3-sandbox >/dev/null 2>&1 \
-      && ! HOME="$claude_home" claude mcp add --scope user t3-sandbox -- t3-sandbox-mcp >/dev/null; then
+    if ! HOME="$claude_home" "$claude_binary" mcp get t3-sandbox >/dev/null 2>&1 \
+      && ! HOME="$claude_home" "$claude_binary" mcp add --scope user t3-sandbox -- t3-sandbox-mcp >/dev/null; then
       echo "Warning: could not register t3-sandbox MCP in Claude Code." >&2
     fi
   fi
 
   if [[ "$xcode_enabled" == "1" ]]; then
-    if ! HOME="$claude_home" claude mcp get xcodebuild >/dev/null 2>&1 \
-      && ! HOME="$claude_home" claude mcp add --scope user xcodebuild -- t3-xcode-mcp >/dev/null; then
+    if ! HOME="$claude_home" "$claude_binary" mcp get xcodebuild >/dev/null 2>&1 \
+      && ! HOME="$claude_home" "$claude_binary" mcp add --scope user xcodebuild -- t3-xcode-mcp >/dev/null; then
       echo "Warning: could not register XcodeBuildMCP in Claude Code." >&2
     fi
   fi

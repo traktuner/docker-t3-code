@@ -106,3 +106,11 @@ test("starts the sandbox MCP from sanitized harness environments", () => {
   assert.match(bridge, /readFileSync\(tokenFile, "utf8"\)\.trim\(\)/);
   assert.match(bridge, /!Array\.isArray\(value\)/);
 });
+
+test("uses the configured native Claude binary for dedicated-home MCP provisioning", () => {
+  for (const scriptName of ["scripts/provision-agent-rack.sh", "scripts/provision-harness-mcp.sh"]) {
+    const script = read(scriptName);
+    assert.match(script, /T3_CLAUDE_BINARY_PATH/);
+    assert.doesNotMatch(script, /HOME=\"\$claude_home\" claude/);
+  }
+});

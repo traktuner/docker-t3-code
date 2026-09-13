@@ -77,8 +77,21 @@ if ! HOME="$claude_home" claude mcp get agent-rack >/dev/null 2>&1; then
 fi
 
 # Stock `agent-rack cp --target codex` writes to $HOME/.codex/skills and ignores
-# CODEX_HOME, so it would land outside /data/codex in this container. Codex skill
-# distribution is therefore not automated here.
+# CODEX_HOME. Codex discovers shared skills in $HOME/.agents/skills, so copy the
+# generated Codex skill tree into that shared root after the stock operation.
+if ! agent-rack cp --target codex --scope user >/dev/null 2>&1; then
+  warn "could not copy agent-rack skills for Codex."
+else
+  codex_skill_source="$HOME/.codex/skills"
+  shared_skill_root="$HOME/.agents/skills"
+  if [[ -d "$codex_skill_source" ]]; then
+    mkdir -p "$shared_skill_root"
+    rsync -a --exclude='.system/' "$codex_skill_source"/ "$shared_skill_root"/ \
+      || warn "could not copy Codex agent-rack skills into $shared_skill_root."
+  else
+    warn "Codex agent-rack skill source is missing: $codex_skill_source"
+  fi
+fi
 HOME="$claude_home" agent-rack cp --target claude --scope user >/dev/null 2>&1 \
   || warn "could not copy agent-rack skills for Claude Code."
 agent-rack cp --target opencode --scope user >/dev/null 2>&1 \

@@ -349,6 +349,10 @@ provision_promo_video_skill() {
   python3 /opt/t3-docker/provision-promo-video-skill.py --scope container
 }
 
+provision_generic_skills() {
+  python3 /opt/t3-docker/provision-generic-skills.py --scope container
+}
+
 install_npm_latest() {
   local enabled="$1"
   local package_name="$2"
@@ -578,6 +582,7 @@ hydrate_github_auth_for_opencode
 provision_provider_config_dirs
 provision_ste100_policy
 provision_promo_video_skill
+provision_generic_skills
 if [[ "${T3_AUTO_UPDATE_EFFECTIVE:-1}" == "1" ]]; then
   install_npm_latest "${T3_UPDATE_CODEX:-0}" "@openai/codex" "Codex CLI" "codex"
   install_npm_latest "${T3_UPDATE_CLAUDE:-0}" "@anthropic-ai/claude-code" "Claude Code" "claude" "install.cjs"

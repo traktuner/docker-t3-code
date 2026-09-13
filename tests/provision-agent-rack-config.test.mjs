@@ -110,9 +110,9 @@ test("preserves unmanaged agents and security keys on an existing config", () =>
     command: "/usr/bin/custom",
   });
   assert.equal(parsed.agents.codex.name, "Overridden Codex");
-  // allowedWorkspaces and the security block are fully managed (derived from
-  // the environment and container policy), while agents are additive.
-  assert.deepEqual(parsed.allowedWorkspaces, ["/workspace"]);
+  // Existing allowedWorkspaces remain managed input unless the environment
+  // supplies an explicit override, while agents are additive.
+  assert.deepEqual(parsed.allowedWorkspaces, ["/custom"]);
   assert.equal(parsed.security.executionPolicy, "workspace-write");
   assert.equal(parsed.security.maxSessionOutputBytes, 5000000);
   // Managed security keys are still applied around preserved ones.

@@ -60,3 +60,54 @@ test("reconciles native global harness rules without replacing user content", ()
   assert.equal(fs.lstatSync(path.join(grokHome, "AGENTS.md")).isSymbolicLink(), true);
   assert.equal(fs.readFileSync(grokRulesTarget, "utf8"), "# Shared Grok rule\n");
 });
+
+test("reconciles the shared Onyx rule into harness-native roots", () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "t3-onyx-policy-"));
+  const onyxPolicyPath = path.join(directory, "onyx.md");
+  const codexHome = path.join(directory, "codex");
+  const claudeHome = path.join(directory, "claude");
+  const grokHome = path.join(directory, "grok");
+  const opencodeConfig = path.join(directory, "opencode");
+  fs.mkdirSync(codexHome, { recursive: true });
+  fs.mkdirSync(claudeHome, { recursive: true });
+  fs.mkdirSync(grokHome, { recursive: true });
+  fs.mkdirSync(opencodeConfig, { recursive: true });
+  fs.writeFileSync(onyxPolicyPath, "# Shared Onyx context\n\nUse Onyx first.\n");
+  fs.writeFileSync(path.join(codexHome, "AGENTS.md"), "# Existing Codex rule\n");
+  fs.mkdirSync(path.join(claudeHome, ".claude"), { recursive: true });
+  fs.writeFileSync(path.join(claudeHome, ".claude", "CLAUDE.md"), "# Existing Claude rule\n");
+  fs.writeFileSync(path.join(opencodeConfig, "AGENTS.md"), "# Existing OpenCode rule with Onyx\n");
+
+  const environment = {
+    ...process.env,
+    CODEX_HOME: codexHome,
+    T3_CLAUDE_HOME_PATH: claudeHome,
+    GROK_CONFIG_DIR: grokHome,
+    OPENCODE_CONFIG_DIR: opencodeConfig,
+    T3_HARNESS_SANDBOX_INSTRUCTIONS_FILE: onyxPolicyPath,
+    T3_HARNESS_SANDBOX_INSTRUCTIONS: "0",
+    T3_HARNESS_ONYX_INSTRUCTIONS_FILE: onyxPolicyPath,
+    T3_PROVIDER_CODEX: "1",
+    T3_PROVIDER_CLAUDE: "1",
+    T3_PROVIDER_GROK: "1",
+    T3_PROVIDER_OPENCODE: "1",
+  };
+
+  execFileSync("python3", [provisioner], { env: environment });
+  const codex = fs.readFileSync(path.join(codexHome, "AGENTS.md"), "utf8");
+  const claude = fs.readFileSync(path.join(claudeHome, ".claude", "CLAUDE.md"), "utf8");
+  const grok = fs.readFileSync(path.join(grokHome, "AGENTS.md"), "utf8");
+  const opencode = fs.readFileSync(path.join(opencodeConfig, "AGENTS.md"), "utf8");
+
+  for (const content of [codex, claude, grok]) {
+    assert.match(content, /Use Onyx first/);
+    assert.equal((content.match(/t3-docker:onyx-policy:start/g) || []).length, 1);
+  }
+  assert.match(opencode, /Existing OpenCode rule with Onyx/);
+  assert.doesNotMatch(opencode, /t3-docker:onyx-policy:start/);
+
+  execFileSync("python3", [provisioner], { env: environment });
+  assert.equal(fs.readFileSync(path.join(codexHome, "AGENTS.md"), "utf8"), codex);
+  assert.equal(fs.readFileSync(path.join(claudeHome, ".claude", "CLAUDE.md"), "utf8"), claude);
+  assert.equal(fs.readFileSync(path.join(grokHome, "AGENTS.md"), "utf8"), grok);
+});

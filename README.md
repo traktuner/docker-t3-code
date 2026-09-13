@@ -321,6 +321,9 @@ each Cursor session without touching the repository. Existing user rules are
 preserved outside a marked managed block. Set
 `T3_HARNESS_SANDBOX_INSTRUCTIONS=0` to disable this behavior globally. The old
 `T3_OPENCODE_SANDBOX_INSTRUCTIONS` variable remains as a compatibility fallback.
+When `/config/onyx-context.md` is present, startup also reconciles its managed
+Onyx rule into each enabled native root. Existing unmarked Onyx content remains
+untouched.
 Set
 `T3_OPENCODE_SANDBOX_ONLY=1` to deny OpenCode's local filesystem, shell, edit,
 and subagent tools while keeping sandbox, Xcode, and independently configured

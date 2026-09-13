@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Reconcile the managed sandbox policy into harness-native global rule files."""
+"""Reconcile managed cross-harness policies into native global rule files."""
 
 from __future__ import annotations
 
@@ -11,10 +11,8 @@ from pathlib import Path
 
 START = "<!-- t3-docker:sandbox-policy:start -->"
 END = "<!-- t3-docker:sandbox-policy:end -->"
-BLOCK_PATTERN = re.compile(
-    rf"(?m)^[ \t]*{re.escape(START)}[ \t]*\n.*?^[ \t]*{re.escape(END)}[ \t]*(?:\n|$)",
-    re.DOTALL,
-)
+ONYX_START = "<!-- t3-docker:onyx-policy:start -->"
+ONYX_END = "<!-- t3-docker:onyx-policy:end -->"
 
 
 def enabled(name: str, default: str = "1") -> bool:
@@ -25,15 +23,25 @@ def provider_enabled(name: str) -> bool:
     return enabled(f"T3_PROVIDER_{name}")
 
 
-def reconcile_file(path: Path, policy: str, active: bool) -> None:
+def reconcile_file(
+    path: Path,
+    policy: str,
+    active: bool,
+    start: str = START,
+    end: str = END,
+) -> None:
+    block_pattern = re.compile(
+        rf"(?m)^[ \t]*{re.escape(start)}[ \t]*\n.*?^[ \t]*{re.escape(end)}[ \t]*(?:\n|$)",
+        re.DOTALL,
+    )
     destination = path.resolve(strict=False) if path.is_symlink() else path
     before = destination.read_text(encoding="utf-8") if destination.exists() else ""
-    if (START in before) != (END in before):
+    if (start in before) != (end in before):
         raise RuntimeError(f"Refusing to modify malformed managed policy block in {destination}")
-    without_managed = BLOCK_PATTERN.sub("", before).rstrip()
+    without_managed = block_pattern.sub("", before).rstrip()
 
     if active:
-        block = f"{START}\n{policy.rstrip()}\n{END}"
+        block = f"{start}\n{policy.rstrip()}\n{end}"
         after = f"{without_managed}\n\n{block}\n" if without_managed else f"{block}\n"
     else:
         after = f"{without_managed}\n" if without_managed else ""
@@ -92,10 +100,42 @@ def main() -> None:
             "GROK",
             Path(os.environ.get("GROK_CONFIG_DIR", str(home / ".grok"))) / "AGENTS.md",
         ),
+        (
+            "OPENCODE",
+            Path(
+                os.environ.get(
+                    "OPENCODE_CONFIG_DIR",
+                    str(Path(os.environ.get("XDG_CONFIG_HOME", str(home / ".config"))) / "opencode"),
+                )
+            )
+            / "AGENTS.md",
+        ),
     )
 
     for provider, target in targets:
         reconcile_file(target, policy, active and provider_enabled(provider))
+
+    onyx_policy_path = Path(
+        os.environ.get("T3_HARNESS_ONYX_INSTRUCTIONS_FILE", "/config/onyx-context.md")
+    )
+    if onyx_policy_path.is_file():
+        onyx_policy = onyx_policy_path.read_text(encoding="utf-8")
+        for provider, target in targets:
+            if provider_enabled(provider):
+                existing = (
+                    target.resolve(strict=False).read_text(encoding="utf-8")
+                    if target.exists()
+                    else ""
+                )
+                if "onyx" in existing.lower() and ONYX_START not in existing and ONYX_END not in existing:
+                    continue
+            reconcile_file(
+                target,
+                onyx_policy,
+                provider_enabled(provider),
+                ONYX_START,
+                ONYX_END,
+            )
 
 
 if __name__ == "__main__":

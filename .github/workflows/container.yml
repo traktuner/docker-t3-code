@@ -578,8 +578,14 @@ jobs:
             --entrypoint /usr/bin/id \
             "$image"
 
+          # The versioned agent-rack join patch is the single-source-of-truth
+          # policy asset in Infra and is mounted by its pre-deploy hook. This
+          # image-only probe has no Infra policy volume, so test the image
+          # startup independently and leave agent-rack verification to the
+          # canonical Ansible post-deploy checks.
           docker run -d \
             --name "$container_name" \
+            --env T3_AGENT_RACK=0 \
             --read-only \
             --tmpfs /tmp:size=1G \
             --tmpfs /var/tmp:size=500M \

@@ -53,3 +53,5 @@
 - Do not send result-dependent work through stock `agent_session_create`: it is detached, cannot wake a completed parent turn, and `SessionManager.shutdown()` cancels its child processes on an OpenCode/agent-rack restart. Keep the parent inside `agent_run`/the version-gated `agent_run_parallel` join; provision the canonical patch before MCP registration and fail closed if it cannot apply (`scripts/provision-agent-rack.sh`, `scripts/entrypoint.sh`).
 
 - Register the container Claude Onyx MCP with `HOME=/data/claude-home` and the literal header `Authorization: Bearer ${ONYX_TOKEN}`. Do not use the default T3 home or place the bearer value in the image or repository, because Claude stores user MCP settings under the active home (`stacks/t3code/post_deploy.yml`).
+
+- Do not vendor the versioned agent-rack join patch into `docker-t3-code`. Infra owns that single source of truth and mounts it before production startup; the isolated image-only CI runtime probe has no policy volume and must set `T3_AGENT_RACK=0`, while Ansible post-deploy verifies the enabled production path (`.github/workflows/container.yml`, `stacks/t3code/pre_deploy.yml`).

@@ -62,13 +62,18 @@ test("applies environment overrides", () => {
 
   runProvisioner(config, {
     ...baseEnv,
-    T3_AGENT_RACK_ALLOWED_WORKSPACES: "/workspace,/data/projects",
+    T3_AGENT_RACK_ALLOWED_WORKSPACES:
+      "/workspace,/data/t3/worktrees,/Users/thomas/.t3/worktrees",
     T3_AGENT_RACK_MAX_CONCURRENT_SESSIONS: "3",
     T3_AGENT_RACK_DEFAULT_TIMEOUT_SECONDS: "600",
   });
 
   const parsed = JSON.parse(fs.readFileSync(config, "utf8"));
-  assert.deepEqual(parsed.allowedWorkspaces, ["/workspace", "/data/projects"]);
+  assert.deepEqual(parsed.allowedWorkspaces, [
+    "/workspace",
+    "/data/t3/worktrees",
+    "/Users/thomas/.t3/worktrees",
+  ]);
   assert.equal(parsed.security.maxConcurrentSessions, 3);
   assert.equal(parsed.security.defaultTimeoutSeconds, 600);
 });

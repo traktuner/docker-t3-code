@@ -59,3 +59,23 @@
 - Do not treat Mac-only Claude hook paths as portable container configuration. After provider sync, remove unavailable absolute `/Users/...` hook commands from the writable Claude settings copy; otherwise every CLI probe can report non-blocking SessionStart or SessionEnd errors even when MCP servers are healthy (`scripts/provision-harness-instructions.py`).
 
 - Do not vendor the versioned agent-rack join patch into `docker-t3-code`. Infra owns that single source of truth and mounts it before production startup; the isolated image-only CI runtime probe has no policy volume and must set `T3_AGENT_RACK=0`, while Ansible post-deploy verifies the enabled production path (`.github/workflows/container.yml`, `stacks/t3code/pre_deploy.yml`).
+
+- Do not preserve legacy native Claude tier routing beside the agent-rack root policy. A `CLAUDE.md`
+  that still recommends `opus-critical-reviewer` and parallel Claude subagents can make Claude call
+  its built-in `Agent` tool instead of the required fixed agent-rack profile, even when agent-rack is
+  installed and its policy block is present. Strip both conflicting routing sections, quarantine
+  the native agent definitions and legacy routing commands, and explicitly prohibit the built-in
+  `Agent` tool in the reconciled policy (`scripts/provision-harness-instructions.py`,
+  `~/.claude/CLAUDE.md`).
+
+- Do not map T3-generated container worktrees to `/workspace/.t3`. `T3CODE_HOME=/data/t3`
+  stores them below `/data/t3/worktrees`; `/workspace` is only the mounted developer repository
+  root. Keep `/data/t3/worktrees` and `/Users/thomas/.t3/worktrees` in the universal agent-rack
+  allowlist, but never allow either complete T3 state root because it also contains authentication
+  and session state (`docker-compose.yml`, `README.md`, `scripts/provision-agent-rack-config.mjs`).
+
+- Do not vendor or re-implement the agent-rack harness limits in the image. Infra owns
+  `agent-rack-harness-limits.mjs` and mounts it beside the join patch; `provision-agent-rack.sh`
+  runs it last, after `provision-harness-mcp.sh` rewrites the Codex and OpenCode MCP configs, so
+  the 3-hour agent-rack timeout and the native-subagent deny rules are not overwritten
+  (`scripts/provision-agent-rack.sh`, `scripts/entrypoint.sh`).

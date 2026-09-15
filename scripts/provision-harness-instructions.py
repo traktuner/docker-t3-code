@@ -15,6 +15,41 @@ START = "<!-- t3-docker:sandbox-policy:start -->"
 END = "<!-- t3-docker:sandbox-policy:end -->"
 ONYX_START = "<!-- t3-docker:onyx-policy:start -->"
 ONYX_END = "<!-- t3-docker:onyx-policy:end -->"
+CLAUDE_NATIVE_ROUTING = re.compile(
+    r"(?ms)^## Execution model[ \t]*\n.*?(?=^## Project traps\b)"
+)
+CLAUDE_NATIVE_ROUTING_SENTINELS = (
+    "The user's primary coding harness is now OpenCode + Lumo Max",
+    "`opus-critical-reviewer`",
+    "Use parallel Claude subagents",
+)
+CLAUDE_NATIVE_BUNDLE = re.compile(
+    r"(?ms)^## Available local bundle[ \t]*\n.*?(?=^Lead final responses)"
+)
+CLAUDE_NATIVE_BUNDLE_SENTINELS = (
+    "## Available local bundle",
+    "The tiered subagents",
+    "`opus-critical-reviewer`",
+    "`/preflight`",
+)
+CLAUDE_NATIVE_TIER_AGENTS = (
+    "lumo-basic-researcher.md",
+    "lumo-plus-implementer.md",
+    "sonnet-sanity-checker.md",
+    "opus-critical-reviewer.md",
+    "fable-architect.md",
+)
+CLAUDE_NATIVE_ROUTING_COMMANDS = (
+    "codex-impl.md",
+    "codex-review.md",
+    "critical-review.md",
+    "final-review.md",
+    "lumo-impl.md",
+    "lumo-research.md",
+    "lumo-review.md",
+    "preflight.md",
+    "sanity-check.md",
+)
 
 
 def enabled(name: str, default: str = "1") -> bool:
@@ -91,6 +126,51 @@ def sanitize_claude_hooks(path: Path) -> None:
         temporary.unlink(missing_ok=True)
 
 
+def sanitize_claude_native_delegation(claude_home: Path) -> None:
+    rules = claude_home / ".claude" / "CLAUDE.md"
+    if rules.is_file():
+        before = rules.read_text(encoding="utf-8")
+        after = before
+        if all(marker in before for marker in CLAUDE_NATIVE_ROUTING_SENTINELS):
+            after = CLAUDE_NATIVE_ROUTING.sub("", before, count=1)
+        if all(marker in after for marker in CLAUDE_NATIVE_BUNDLE_SENTINELS):
+            after = CLAUDE_NATIVE_BUNDLE.sub("", after, count=1)
+        if after != before:
+            rules.write_text(after, encoding="utf-8")
+
+    routing_paths = (
+        (
+            claude_home / ".claude" / "agents",
+            claude_home / ".claude" / "agents-quarantine" / "agent-rack-native-tier",
+            CLAUDE_NATIVE_TIER_AGENTS,
+        ),
+        (
+            claude_home / ".claude" / "commands",
+            claude_home / ".claude" / "commands-quarantine" / "agent-rack-native-tier",
+            CLAUDE_NATIVE_ROUTING_COMMANDS,
+        ),
+    )
+    for source_root, quarantine, names in routing_paths:
+        for name in names:
+            source = source_root / name
+            if not source.is_file():
+                continue
+            quarantine.mkdir(parents=True, exist_ok=True)
+            destination = quarantine / name
+            if destination.is_file() and destination.read_bytes() == source.read_bytes():
+                source.unlink()
+                continue
+            if destination.exists():
+                index = 1
+                while True:
+                    candidate = quarantine / f"{Path(name).stem}.restored-{index}.md"
+                    if not candidate.exists():
+                        destination = candidate
+                        break
+                    index += 1
+            source.replace(destination)
+
+
 def reconcile_file(
     path: Path,
     policy: str,
@@ -153,6 +233,7 @@ def main() -> None:
     )
 
     home = Path(os.environ.get("HOME", "/data/home"))
+    claude_home = Path(os.environ.get("T3_CLAUDE_HOME_PATH", "/data/claude-home"))
     targets = (
         (
             "CODEX",
@@ -160,9 +241,7 @@ def main() -> None:
         ),
         (
             "CLAUDE",
-            Path(os.environ.get("T3_CLAUDE_HOME_PATH", "/data/claude-home"))
-            / ".claude"
-            / "CLAUDE.md",
+            claude_home / ".claude" / "CLAUDE.md",
         ),
         (
             "GROK",
@@ -183,13 +262,14 @@ def main() -> None:
         ),
     )
 
+    if enabled("T3_AGENT_RACK") and provider_enabled("CLAUDE"):
+        sanitize_claude_native_delegation(claude_home)
+
     for provider, target in targets:
         reconcile_file(target, policy, active and provider_enabled(provider))
 
     sanitize_claude_hooks(
-        Path(os.environ.get("T3_CLAUDE_HOME_PATH", "/data/claude-home"))
-        / ".claude"
-        / "settings.json"
+        claude_home / ".claude" / "settings.json"
     )
 
     onyx_policy_path = Path(

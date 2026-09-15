@@ -107,4 +107,23 @@ HOME="$claude_home" agent-rack cp --target claude --scope user >/dev/null 2>&1 \
 agent-rack cp --target opencode --scope user >/dev/null 2>&1 \
   || warn "could not copy agent-rack skills for OpenCode."
 
+# The canonical harness-limits script is mounted by the infra pre-deploy role
+# next to the join patch. It sets the 3-hour agent-rack MCP tool-call timeout
+# and disables native subagent tools, so agent-rack is the only delegation path.
+harness_limits="$(dirname "$config_path")/agent-rack-harness-limits.mjs"
+if [[ ! -f "$harness_limits" ]]; then
+  warn "agent-rack harness limits are missing: $harness_limits"
+  exit 1
+fi
+opencode_dir="${OPENCODE_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/opencode}"
+if ! node "$harness_limits" \
+  --codex-config "${CODEX_HOME:-/data/codex}/config.toml" \
+  --claude-config "$claude_home/.claude.json" \
+  --claude-settings "$claude_home/.claude/settings.json" \
+  --opencode-config "$opencode_dir/opencode.jsonc" \
+  --opencode-config "$opencode_dir/opencode.json"; then
+  warn "could not apply the agent-rack harness limits."
+  exit 1
+fi
+
 exit 0

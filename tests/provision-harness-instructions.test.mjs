@@ -61,6 +61,89 @@ test("reconciles native global harness rules without replacing user content", ()
   assert.equal(fs.readFileSync(grokRulesTarget, "utf8"), "# Shared Grok rule\n");
 });
 
+test("removes legacy native Claude delegation when agent-rack is enabled", () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "t3-claude-routing-"));
+  const policyPath = path.join(directory, "policy.md");
+  const claudeHome = path.join(directory, "claude");
+  const claudeConfig = path.join(claudeHome, ".claude");
+  const agents = path.join(claudeConfig, "agents");
+  const commands = path.join(claudeConfig, "commands");
+  fs.mkdirSync(agents, { recursive: true });
+  fs.mkdirSync(commands, { recursive: true });
+  fs.writeFileSync(policyPath, "# Mandatory sandbox\n");
+  fs.writeFileSync(
+    path.join(claudeConfig, "CLAUDE.md"),
+    "# Existing Claude rule\n\n" +
+      "## Execution model\n\n" +
+      "The user's primary coding harness is now OpenCode + Lumo Max.\n" +
+      "Use `opus-critical-reviewer` when needed.\n" +
+      "Use parallel Claude subagents for reviews.\n\n" +
+      "## Project traps — read first\n\nKeep this section.\n",
+  );
+  for (const name of [
+    "lumo-basic-researcher.md",
+    "lumo-plus-implementer.md",
+    "sonnet-sanity-checker.md",
+    "opus-critical-reviewer.md",
+    "fable-architect.md",
+  ]) {
+    fs.writeFileSync(path.join(agents, name), `name: ${name}\n`);
+  }
+  fs.appendFileSync(
+    path.join(claudeConfig, "CLAUDE.md"),
+    "\n## Available local bundle\n\n" +
+      "- The tiered subagents (`lumo-basic-researcher`, `opus-critical-reviewer`) route work.\n" +
+      "  `/preflight` documents the current tier map.\n\n" +
+      "Lead final responses with outcome.\n",
+  );
+  for (const name of [
+    "codex-impl.md",
+    "codex-review.md",
+    "critical-review.md",
+    "final-review.md",
+    "lumo-impl.md",
+    "lumo-research.md",
+    "lumo-review.md",
+    "preflight.md",
+    "sanity-check.md",
+  ]) {
+    fs.writeFileSync(path.join(commands, name), `name: ${name}\n`);
+  }
+
+  execFileSync("python3", [provisioner], {
+    env: {
+      ...process.env,
+      T3_CLAUDE_HOME_PATH: claudeHome,
+      T3_HARNESS_SANDBOX_INSTRUCTIONS_FILE: policyPath,
+      T3_HARNESS_SANDBOX_INSTRUCTIONS: "0",
+      T3_HARNESS_ONYX_INSTRUCTIONS_FILE: path.join(directory, "missing-onyx.md"),
+      T3_AGENT_RACK: "1",
+      T3_PROVIDER_CLAUDE: "1",
+    },
+  });
+
+  const rules = fs.readFileSync(path.join(claudeConfig, "CLAUDE.md"), "utf8");
+  assert.doesNotMatch(rules, /primary coding harness is now OpenCode/);
+  assert.doesNotMatch(rules, /parallel Claude subagents/);
+  assert.doesNotMatch(rules, /Available local bundle/);
+  assert.match(rules, /Project traps — read first/);
+  for (const name of fs.readdirSync(agents)) {
+    assert.doesNotMatch(name, /^(lumo-|sonnet-|opus-|fable-)/);
+  }
+  const quarantine = path.join(
+    claudeConfig,
+    "agents-quarantine",
+    "agent-rack-native-tier",
+  );
+  assert.equal(fs.readdirSync(quarantine).length, 5);
+  const commandQuarantine = path.join(
+    claudeConfig,
+    "commands-quarantine",
+    "agent-rack-native-tier",
+  );
+  assert.equal(fs.readdirSync(commandQuarantine).length, 9);
+});
+
 test("reconciles the shared Onyx rule into harness-native roots", () => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "t3-onyx-policy-"));
   const onyxPolicyPath = path.join(directory, "onyx.md");

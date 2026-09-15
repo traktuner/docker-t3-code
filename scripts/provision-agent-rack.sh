@@ -71,7 +71,9 @@ if ! codex mcp get agent-rack >/dev/null 2>&1; then
 fi
 
 # `opencode mcp list` always exits 0, so probe its output instead of the code.
-if ! opencode mcp list 2>/dev/null | grep -q "agent-rack"; then
+# Capture first: `| grep -q` makes opencode die of SIGPIPE, and pipefail then
+# reports a missing entry, so the stock installer rewrote it on every start.
+if [[ "$(opencode mcp list 2>/dev/null)" != *agent-rack* ]]; then
   run_stock_install opencode
 fi
 

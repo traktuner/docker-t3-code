@@ -79,3 +79,5 @@
   runs it last, after `provision-harness-mcp.sh` rewrites the Codex and OpenCode MCP configs, so
   the 3-hour agent-rack timeout and the native-subagent deny rules are not overwritten
   (`scripts/provision-agent-rack.sh`, `scripts/entrypoint.sh`).
+
+- Deploy all three Infra-owned agent-rack reliability assets before startup and retain write ownership only for the four patched installed JS files. The runtime patch must fail closed if assets or version anchors differ. Claude workers need `/data/claude-home`; Onyx requires explicit `ONYX_TOKEN` inheritance because stock environment sanitization removes it (`Dockerfile`, `scripts/provision-agent-rack.sh`, canonical `agent-rack-worker-capabilities.mjs`).

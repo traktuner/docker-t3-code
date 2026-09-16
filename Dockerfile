@@ -185,6 +185,9 @@ RUN --mount=type=cache,target=/tmp/npm-cache \
     chmod +x /opt/t3-docker/install-provider-clis.sh \
     && T3_DOCKER_KEEP_NPM_CACHE=1 T3_DOCKER_NPM_CACHE_DIR=/tmp/npm-cache T3_DOCKER_INSTALL_TARGET=providers CODEX_VERSION="${CODEX_VERSION}" CLAUDE_VERSION="${CLAUDE_VERSION}" OPENCODE_VERSION="${OPENCODE_VERSION}" AGENT_RACK_VERSION="${AGENT_RACK_VERSION}" CURSOR_INSTALLER_SHA256="${CURSOR_INSTALLER_SHA256}" GROK_INSTALLER_SHA256="${GROK_INSTALLER_SHA256}" GROK_VERSION="${GROK_VERSION}" /opt/t3-docker/install-provider-clis.sh \
     && chown t3:t3 /usr/local/lib/node_modules/agent-rack/dist/tools/unified.js \
+        /usr/local/lib/node_modules/agent-rack/dist/tools/review.js \
+        /usr/local/lib/node_modules/agent-rack/dist/engine/session.js \
+        /usr/local/lib/node_modules/agent-rack/dist/engine/review.js \
     && chown -R t3:t3 /data
 
 RUN --mount=type=cache,target=/data/npm-cache \

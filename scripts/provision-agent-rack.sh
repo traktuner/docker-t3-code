@@ -43,6 +43,19 @@ if ! node "$join_patcher"; then
   exit 1
 fi
 
+# Infra owns the same worker/review policy used by the Mac installer.
+reliability_patcher="$(dirname "$config_path")/agent-rack-reliability-patch.mjs"
+for asset in agent-rack-reliability-patch.mjs agent-rack-worker-capabilities.mjs agent-rack-review-validation.mjs; do
+  if [[ ! -f "$(dirname "$config_path")/$asset" ]]; then
+    warn "agent-rack reliability asset is missing: $asset"
+    exit 1
+  fi
+done
+if ! node "$reliability_patcher"; then
+  warn "could not apply the agent-rack worker/review reliability patch."
+  exit 1
+fi
+
 if ! agent-rack config-check -c "$config_path"; then
   warn "the agent-rack configuration at $config_path failed validation."
 fi

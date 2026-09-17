@@ -42,36 +42,37 @@ test("passes non-prompt and malformed ACP lines through unchanged", () => {
   assert.equal(injectPolicyLine("not-json", "USE SANDBOX", sessions), "not-json");
 });
 
-test("combines STE-only, sandbox-only, and both policies deterministically", () => {
-  assert.equal(combinePolicies("USE STE", ""), "USE STE");
+test("combines generic, sandbox-only, and both policies deterministically", () => {
+  assert.equal(combinePolicies("USE POLICY", ""), "USE POLICY");
   assert.equal(combinePolicies("", "USE SANDBOX"), "USE SANDBOX");
-  assert.equal(combinePolicies("USE STE\n", "\nUSE SANDBOX"), "USE STE\n\nUSE SANDBOX");
+  assert.equal(combinePolicies("USE POLICY\n", "\nUSE SANDBOX"), "USE POLICY\n\nUSE SANDBOX");
 });
 
-test("loads mandatory STE without a sandbox and adds sandbox policy only when active", () => {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "t3-cursor-ste-"));
-  const ste = path.join(directory, "ste.md");
+test("loads an optional generic policy and adds sandbox policy only when active", () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "t3-cursor-policy-"));
+  const policy = path.join(directory, "policy.md");
   const sandbox = path.join(directory, "sandbox.md");
-  fs.writeFileSync(ste, "USE STE\n");
+  fs.writeFileSync(policy, "USE POLICY\n");
   fs.writeFileSync(sandbox, "USE SANDBOX\n");
 
-  assert.equal(readPolicy({ T3_STE100_POLICY_FILE: ste }), "USE STE");
+  assert.equal(readPolicy({ T3_CURSOR_POLICY_FILE: policy }), "USE POLICY");
+  assert.equal(readPolicy({}), "");
   assert.equal(
     readPolicy({
-      T3_STE100_POLICY_FILE: ste,
+      T3_CURSOR_POLICY_FILE: policy,
       T3_SANDBOX_URL: "http://sandbox",
       T3_HARNESS_SANDBOX_INSTRUCTIONS: "1",
       T3_HARNESS_SANDBOX_INSTRUCTIONS_FILE: sandbox,
     }),
-    "USE STE\n\nUSE SANDBOX",
+    "USE POLICY\n\nUSE SANDBOX",
   );
   assert.equal(
     readPolicy({
-      T3_STE100_POLICY_FILE: ste,
+      T3_CURSOR_POLICY_FILE: policy,
       T3_SANDBOX_URL: "http://sandbox",
       T3_HARNESS_SANDBOX_INSTRUCTIONS: "0",
       T3_HARNESS_SANDBOX_INSTRUCTIONS_FILE: sandbox,
     }),
-    "USE STE",
+    "USE POLICY",
   );
 });

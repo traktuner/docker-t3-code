@@ -34,7 +34,7 @@ instead of trying to authenticate a sandbox or falling back to the host shell.
 - Preserves unknown T3 settings and future provider instances while updating the fields managed by the container.
 - Lets the official server add `/workspace` as a T3 project through `--auto-bootstrap-project-from-cwd` when enabled.
 - Stores API keys as T3 secret files under `data/t3/userdata/secrets`, not in `settings.json`.
-- Can run a managed container-local OpenCode server and point T3 at it through `serverUrl`; this is the preferred path for custom OpenCode configs such as Proton Lumo.
+- Can run a managed container-local OpenCode server and point T3 at it through `serverUrl` for operator-supplied provider configurations.
 
 ## Quick Start
 
@@ -163,134 +163,6 @@ T3_WORKSPACE_GID=<share-group-id>
 Do not recursively chown the workspace to the container UID; that breaks SMB/NAS
 ACL expectations.
 
-## Mandatory ASD-STE100 writing policy
-
-The image applies a concise ASD-STE100 writing policy to operational English for
-every enabled agent harness. It covers parent-to-subagent briefs, subagent
-reports, handoffs, system prompts, tool and function descriptions, status and
-error messages, technical instructions and answers, checklists, and runbooks.
-The same core rules are present in the global policy, so a parent does not rely
-on a subagent to load the optional skill context.
-
-The policy excludes source code, identifiers, shell commands, data formats,
-protocol fields, unchanged logs, third-party errors, direct quotations,
-creative and marketing text, German communication, and technical terms whose
-simplification would reduce precision. Facts, numbers, conditions, exceptions,
-safety constraints, and scope statements must remain intact.
-
-The portable `asd-ste100` skill has two modes:
-
-- Silent writing mode is the default. The agent applies the rules without an
-  analysis or before-and-after table.
-- Explicit audit mode is used only for a requested STE audit, ASD-STE100 audit,
-  Simplification Review, before-and-after comparison, or STE rewrite.
-
-The unmodified upstream skill comes from
-[`danyuchn/asd-ste100-skill`](https://github.com/danyuchn/asd-ste100-skill) at
-commit `8564f8985f15104c2184f90531bfd1bbb25f3d5b` on `master`. The MIT-licensed
-files are vendored under `vendor/asd-ste100/`; `LOCK.json` records the complete
-file list and every SHA-256. The T3 overlay is separate under
-`agent-assets/skills/asd-ste100/`.
-
-At container startup, `scripts/provision-ste100-policy.py --scope container`
-runs after provider configuration sync and before any managed harness or T3
-server starts. It installs these managed paths:
-
-- Codex and OpenCode skill: `$HOME/.agents/skills/asd-ste100`
-- Claude Code skill: `${T3_CLAUDE_HOME_PATH}/.claude/skills/asd-ste100`
-- Codex policy: `$CODEX_HOME/AGENTS.md`
-- Claude Code policy: `${T3_CLAUDE_HOME_PATH}/.claude/CLAUDE.md`
-- OpenCode policy: `$OPENCODE_CONFIG_DIR/AGENTS.md`
-- Grok policy: `$GROK_CONFIG_DIR/AGENTS.md`
-
-If a Codex `AGENTS.override.md` already exists, the provisioner also manages a
-block in that file because Codex loads it before `AGENTS.md`. The provisioner
-never creates an override file.
-
-Cursor receives the mandatory policy through its ACP wrapper. The wrapper adds
-the sandbox policy only when sandbox instructions are enabled. It injects the
-deterministically combined policy once per ACP session. Grok receives the
-global policy only because no compatible Grok skill directory is assumed. The
-issue worker provisions its dedicated OpenCode policy and shared skill after
-its config mirror and before the worker starts.
-
-The mandatory policy is independent of `T3_SANDBOX_URL`,
-`T3_HARNESS_SANDBOX_INSTRUCTIONS`, and
-`T3_OPENCODE_SANDBOX_INSTRUCTIONS`. There is no normal environment switch that
-disables it.
-
-Use the same provisioner for local Codex, Claude Code, and OpenCode on macOS:
-
-```bash
-python3 scripts/provision-ste100-policy.py --scope user --dry-run
-python3 scripts/provision-ste100-policy.py --scope user --install
-python3 scripts/provision-ste100-policy.py --scope user --dry-run
-```
-
-The user targets are `~/.agents/skills/asd-ste100`,
-`~/.claude/skills/asd-ste100`, `~/.codex/AGENTS.md`,
-`~/.claude/CLAUDE.md`, and `~/.config/opencode/AGENTS.md`. A successful second
-dry-run reports no changes. Remove only managed content with:
-
-```bash
-python3 scripts/provision-ste100-policy.py --scope user --uninstall
-```
-
-The provisioner performs a complete conflict preflight before it writes. It
-preserves bytes and modes outside the managed markers. It rejects incomplete or
-duplicate markers, unsafe symlinks, and foreign or modified same-name skill
-directories. A dry-run reports every planned change and conflict without
-writing.
-
-To update upstream, review a new commit on `master`, verify its license, file
-types, modes, and contents, then replace both byte-identical upstream copies.
-Update the commit, file list, and all hashes in `vendor/asd-ste100/LOCK.json` in
-the same change. Never edit a vendored upstream file locally; change only the
-overlay policy or overlay skill.
-
-Policy compliance is model-based. It is not a mathematical output validator.
-
-## Promo video script skill
-
-The image includes the portable `promo-video-script` skill for product promo,
-marketing, sales, and animated explainer video requests. The unmodified source
-comes from
-[`Gnurpreet/promo-video-script-skill`](https://github.com/Gnurpreet/promo-video-script-skill)
-at commit `0d34d65fb02b29016a25b38c3e1a593731732f76` on `main`. The MIT-licensed
-files and their SHA-256 values are pinned under `vendor/promo-video-script/`.
-The container does not download the skill at startup.
-
-At container startup, `scripts/provision-promo-video-skill.py --scope container`
-runs after provider configuration sync and before any provider harness or T3
-server starts. It installs the skill into these enabled harness paths:
-
-- Codex, OpenCode, and Cursor: `$HOME/.agents/skills/promo-video-script`
-- Claude Code: `${T3_CLAUDE_HOME_PATH}/.claude/skills/promo-video-script`
-- Grok: `$GROK_CONFIG_DIR/skills/promo-video-script`
-- Issue worker: `$HOME/.agents/skills/promo-video-script` in its separate home
-
-Use the same provisioner for all supported local macOS harnesses:
-
-```bash
-python3 scripts/provision-promo-video-skill.py --scope user --dry-run
-python3 scripts/provision-promo-video-skill.py --scope user --install
-python3 scripts/provision-promo-video-skill.py --scope user --dry-run
-```
-
-User mode installs the shared Codex, OpenCode, and Cursor copy under
-`~/.agents/skills`, the Claude Code copy under `~/.claude/skills`, and the Grok
-copy under `~/.grok/skills`. The provisioner performs a complete conflict
-preflight. It does not overwrite a foreign or modified skill directory. Remove
-only its managed copies with:
-
-```bash
-python3 scripts/provision-promo-video-skill.py --scope user --uninstall
-```
-
-To update the skill, review the new upstream commit and license. Replace the
-vendored files byte-for-byte. Update the commit, complete file list, and all
-hashes in `LOCK.json` in the same change.
-
 ## Ephemeral Coding Sandboxes
 
 The optional stack under [`sandbox/`](sandbox/) keeps tool-heavy agent work out
@@ -312,20 +184,21 @@ Set `T3_SANDBOX_URL`, `T3_SANDBOX_TOKEN_FILE`, and
 same `t3-sandbox` MCP tools for enabled OpenCode, Codex, Claude, Cursor, and Grok
 harnesses.
 
-The container installs the same managed global rule for every enabled harness:
-OpenCode uses its configured instruction file, Codex uses
-`$CODEX_HOME/AGENTS.md`, Claude uses `~/.claude/CLAUDE.md`, and Grok uses
-`$GROK_CONFIG_DIR/AGENTS.md`. Cursor only supports repository-level rule files,
-so T3 uses a transparent ACP wrapper that adds the rule to the first prompt of
-each Cursor session without touching the repository. Existing user rules are
-preserved outside a marked managed block. Set
-`T3_HARNESS_SANDBOX_INSTRUCTIONS=0` to disable this behavior globally. The old
-`T3_OPENCODE_SANDBOX_INSTRUCTIONS` variable remains as a compatibility fallback.
-When `/config/onyx-context.md` is present, startup also reconciles its managed
-Onyx rule into each enabled native root. Existing unmarked Onyx content remains
-untouched.
-The same startup pass removes unavailable absolute `/Users/...` commands from
-the writable Claude hook configuration. Valid container-local hooks remain.
+The image does not install personal policies or skills. Operators can provide
+those files through the mounted configuration bundle or an operator bootstrap.
+Stock agent-rack is installed as a CLI. The operator configures and registers its MCP
+through the bootstrap when required. The image does not select agents or workspaces.
+The bootstrap runs before the final generic MCP reconciliation and before any harness starts.
+Issue-worker examples accept provider keys through `T3_ISSUE_WORKER_<PROVIDER>_API_KEY`.
+Authentication files can also be supplied through the mounted OpenCode configuration.
+The worker forwards only its explicit provider variable allowlist to OpenCode.
+
+Startup does not delete Git locks, repair stash references, or prune reflogs.
+For a network workspace error, stop that workspace's writers and diagnose the affected
+repository before an explicit repair. Container restart is not a Git repair command.
+Cursor accepts an optional generic policy through `T3_CURSOR_POLICY_FILE`.
+When sandbox instructions are enabled, the Cursor wrapper also injects the
+configured sandbox policy.
 Set
 `T3_OPENCODE_SANDBOX_ONLY=1` to deny OpenCode's local filesystem, shell, edit,
 and subagent tools while keeping sandbox, Xcode, and independently configured
@@ -375,7 +248,7 @@ the network workspace mount.
 
 ## Autonomous GitHub Issues
 
-The optional `issue-worker` Compose profile runs OpenCode/Lumo independently of
+The optional `issue-worker` Compose profile runs OpenCode independently of
 the interactive T3 server. It polls GitHub for open issues carrying
 `agent-ready`, creates an isolated checkout, delegates all commands and builds
 to the existing T3 sandbox, and opens a draft pull request. It never merges.
@@ -394,7 +267,7 @@ with `Contents`, `Issues`, and `Pull requests` set to read/write. Then configure
 
 ```bash
 T3_ISSUE_WORKER_GITHUB_TOKEN=github_pat_...
-T3_ISSUE_WORKER_MODEL=proton/lumo-max
+T3_ISSUE_WORKER_MODEL=<provider/model>
 T3_SANDBOX_URL=http://t3-sandbox-gateway:8090
 T3_SANDBOX_TOKEN=...
 docker compose --profile issue-worker up -d
@@ -426,7 +299,6 @@ checkout is removed only after the branch and draft PR exist remotely.
 Put keys in `.env` or your shell environment:
 
 ```bash
-LUMO_API_KEY=...
 CLOUDFLARE_API_TOKEN=...
 GITHUB_PERSONAL_ACCESS_TOKEN=...
 OPENAI_API_KEY=...
@@ -442,23 +314,6 @@ SENTRY_ACCESS_TOKEN=...
 
 Provider-specific variables can be added in `config/t3code.toml` with `[[providers.<name>.env]]`.
 
-For Proton Lumo through OpenCode, use the included config example:
-
-```bash
-cp config/opencode.lumo.example.json config/opencode.lumo.json
-T3_PROVIDER_CODEX=0
-T3_PROVIDER_CLAUDE=0
-T3_PROVIDER_CURSOR=0
-T3_PROVIDER_GROK=0
-T3_PROVIDER_OPENCODE=1
-T3_OPENCODE_MANAGED_SERVER=1
-T3_OPENCODE_CONFIG_SOURCE=/config/opencode.lumo.json
-T3_OPENCODE_DEFAULT_MODEL=proton/lumo-max
-T3_OPENCODE_CUSTOM_MODELS=proton/lumo-lite,proton/lumo-max
-T3_OPENCODE_MODEL_ORDER=proton/lumo-max,proton/lumo-lite
-LUMO_API_KEY=...
-```
-
 For full harness setups with rules, agents, commands, plugins, tools, and skills, mount directories under `/config` and let the entrypoint sync them into writable provider homes:
 
 ```bash
@@ -471,7 +326,14 @@ T3_CLAUDE_CONFIG_DIR_SOURCE=/config/claude
 T3_GROK_CONFIG_DIR_SOURCE=/config/grok
 ```
 
-OpenCode defaults to `T3_OPENCODE_CONFIG_SYNC_MODE=preserve-mcp`: the mounted config is mirrored into the writable runtime config, but MCP server registrations added later through OpenCode are restored after the sync. Use `mirror` when `/config/opencode` must be strictly authoritative, `seed` for first-start-only defaults, `merge` for overwrite-without-delete, or `none` to skip syncing. Codex, Claude, and Grok sync without delete so persisted login/session files are not removed. Keep secrets out of these directories when possible; use environment references such as `{env:LUMO_API_KEY}` in `opencode.jsonc`.
+The image has neutral startup defaults. Operators can set `T3_CONFIG_REVISION`
+for bundle tracking and `T3_CONFIG_BOOTSTRAP` to an absolute path for a readable
+operator-owned shell script. The script runs with `container` after generic
+configuration and MCP setup. The issue-worker entrypoint runs the same script
+with `issue-worker` before the worker starts. An unset variable is a no-op.
+Missing or failing configured scripts stop startup.
+
+OpenCode defaults to `T3_OPENCODE_CONFIG_SYNC_MODE=preserve-mcp`: the mounted config is mirrored into the writable runtime config, but MCP server registrations added later through OpenCode are restored after the sync. Use `mirror` when `/config/opencode` must be strictly authoritative, `seed` for first-start-only defaults, `merge` for overwrite-without-delete, or `none` to skip syncing. Codex, Claude, and Grok sync without delete so persisted login/session files are not removed. Keep secrets out of these directories when possible; use environment references in `opencode.jsonc`.
 
 Cloudflare's official OpenCode MCP set is provisioned into the writable runtime OpenCode config by default:
 
@@ -509,7 +371,7 @@ T3 model pickers can be filtered without changing provider configs:
 ```bash
 T3_OPENCODE_HIDDEN_MODELS=provider/model-a,provider/model-b
 T3_CODEX_HIDDEN_MODELS=gpt-old-model
-T3_PROVIDER_MODEL_PREFERENCES_JSON='{"opencode":{"hiddenModels":["provider/model-a"],"modelOrder":["proton/lumo-max"]}}'
+T3_PROVIDER_MODEL_PREFERENCES_JSON='{"opencode":{"hiddenModels":["provider/model-a"],"modelOrder":["provider/model-b"]}}'
 ```
 
 ## Persistence

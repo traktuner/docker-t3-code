@@ -89,10 +89,11 @@ function loadConfig() {
   if (!token) throw new Error("T3_ISSUE_WORKER_GITHUB_TOKEN is required");
   if (!sandboxToken || !sandboxUrl)
     throw new Error("T3_SANDBOX_URL and T3_SANDBOX_TOKEN are required");
+  const model = (process.env.T3_ISSUE_WORKER_MODEL || "").trim();
+  if (!model) throw new Error("T3_ISSUE_WORKER_MODEL is required");
 
   return {
     token,
-    lumoKey: process.env.LUMO_API_KEY || "",
     sandboxToken,
     sandboxUrl,
     apiUrl: (
@@ -106,7 +107,7 @@ function loadConfig() {
       process.env.T3_ISSUE_WORKER_REPOSITORIES || "",
     ),
     allowedActors: parseCsv(process.env.T3_ISSUE_WORKER_ALLOWED_ACTORS || ""),
-    model: process.env.T3_ISSUE_WORKER_MODEL || "proton/lumo-max",
+    model,
     agent: process.env.T3_ISSUE_WORKER_AGENT || "github-issue-worker",
     promptSuffix: process.env.T3_ISSUE_WORKER_PROMPT_SUFFIX || "",
     branchPrefix: process.env.T3_ISSUE_WORKER_BRANCH_PREFIX || "t3-agent",
@@ -157,7 +158,7 @@ function log(message, details = "") {
 function safeError(error, config) {
   return redact(
     error instanceof Error ? error.stack || error.message : String(error),
-    [config.token, config.lumoKey, config.sandboxToken],
+    [config.token, config.sandboxToken],
   );
 }
 
@@ -357,6 +358,21 @@ function strippedEnvironment(extra = {}) {
     "https_proxy",
     "no_proxy",
     "NODE_EXTRA_CA_CERTS",
+    "LUMO_API_KEY",
+    "GEMINI_API_KEY",
+    "GOOGLE_GENERATIVE_AI_API_KEY",
+    "CODEX_API_KEY",
+    "OPENCODE_API_KEY",
+    "OPENAI_API_KEY",
+    "OPENAI_BASE_URL",
+    "ANTHROPIC_API_KEY",
+    "ANTHROPIC_BASE_URL",
+    "ANTHROPIC_AUTH_TOKEN",
+    "OPENROUTER_API_KEY",
+    "XAI_API_KEY",
+    "GROK_DEPLOYMENT_KEY",
+    "GROK_PROXY_URL",
+    "GROK_CHANNEL",
   ];
   const env = Object.fromEntries(
     allowed.flatMap((key) =>
@@ -391,7 +407,6 @@ function openCodeEnvironment(config, workspace) {
   delete bridge.T3_SANDBOX_TOKEN_FILE;
   return strippedEnvironment({
     ...bridge,
-    LUMO_API_KEY: config.lumoKey,
     T3_SANDBOX_TOKEN: config.sandboxToken,
     T3_SANDBOX_WORKSPACE: workspace,
     OPENCODE_DISABLE_PROJECT_CONFIG: "1",
@@ -754,7 +769,7 @@ async function changedFiles(config, job) {
 }
 
 async function scanChanges(config, job, files) {
-  const secrets = [config.token, config.lumoKey, config.sandboxToken].filter(
+  const secrets = [config.token, config.sandboxToken].filter(
     (value) => value.length >= 8,
   );
   for (const file of files) {

@@ -42,46 +42,31 @@ fi
   echo "T3_ISSUE_WORKER_GITHUB_TOKEN or its file variant is required" >&2
   exit 1
 }
-[[ -n "${LUMO_API_KEY:-}" ]] || {
-  echo "LUMO_API_KEY is required by the default issue-worker model" >&2
+[[ -n "${T3_ISSUE_WORKER_MODEL:-}" ]] || {
+  echo "T3_ISSUE_WORKER_MODEL is required" >&2
   exit 1
 }
 [[ -n "${T3_SANDBOX_URL:-}" && -n "${T3_SANDBOX_TOKEN:-}" ]] || {
   echo "T3_SANDBOX_URL and T3_SANDBOX_TOKEN (or its file variant) are required" >&2
   exit 1
 }
-[[ -d "$config_source" ]] || {
-  echo "OpenCode config source is missing: $config_source" >&2
-  exit 1
-}
+# The operator bootstrap owns the mounted config and its dependencies when set.
+if [[ -n "${T3_CONFIG_BOOTSTRAP:-}" ]]; then
+  /opt/t3-docker/run-config-bootstrap.sh issue-worker
+else
+  [[ -d "$config_source" ]] || {
+    echo "OpenCode config source is missing: $config_source" >&2
+    exit 1
+  }
 
-# Preserve config metadata without attempting owner/group changes as the non-root worker.
-rsync -rlpt --delete \
-  --exclude='node_modules/' \
-  --exclude='*.bak*' \
-  --exclude='*~' \
-  --exclude='.DS_Store' \
-  "$config_source"/ "$OPENCODE_CONFIG_DIR"/
-
-T3_PROVIDER_CODEX=0 \
-T3_PROVIDER_CLAUDE=0 \
-T3_PROVIDER_OPENCODE=1 \
-T3_PROVIDER_GROK=0 \
-  python3 /opt/t3-docker/provision-ste100-policy.py --scope container
-
-T3_PROVIDER_CODEX=0 \
-T3_PROVIDER_CLAUDE=0 \
-T3_PROVIDER_CURSOR=0 \
-T3_PROVIDER_OPENCODE=1 \
-T3_PROVIDER_GROK=0 \
-  python3 /opt/t3-docker/provision-promo-video-skill.py --scope container
-
-T3_PROVIDER_CODEX=0 \
-T3_PROVIDER_CLAUDE=0 \
-T3_PROVIDER_CURSOR=0 \
-T3_PROVIDER_OPENCODE=1 \
-T3_PROVIDER_GROK=0 \
-  python3 /opt/t3-docker/provision-generic-skills.py --scope container
+  # Preserve config metadata without attempting owner/group changes as the non-root worker.
+  rsync -rlpt --delete \
+    --exclude='node_modules/' \
+    --exclude='*.bak*' \
+    --exclude='*~' \
+    --exclude='.DS_Store' \
+    "$config_source"/ "$OPENCODE_CONFIG_DIR"/
+fi
 
 install -D -m 0600 \
   /opt/t3-docker/github-issue-worker-agent.md \
@@ -91,7 +76,7 @@ if [[ -d "$OPENCODE_CONFIG_DIR/tools" ]]; then
   find "$OPENCODE_CONFIG_DIR/tools" -type f \( -name '*.sh' -o -name '*.py' \) -exec chmod u+x {} +
 fi
 
-if [[ -f "$OPENCODE_CONFIG_DIR/package.json" ]]; then
+if [[ -z "${T3_CONFIG_BOOTSTRAP:-}" && -f "$OPENCODE_CONFIG_DIR/package.json" ]]; then
   digest_files=("$OPENCODE_CONFIG_DIR/package.json")
   [[ ! -f "$OPENCODE_CONFIG_DIR/package-lock.json" ]] || digest_files+=("$OPENCODE_CONFIG_DIR/package-lock.json")
   digest="$(sha256sum "${digest_files[@]}" | sha256sum | awk '{print $1}')"
@@ -100,7 +85,6 @@ if [[ -f "$OPENCODE_CONFIG_DIR/package.json" ]]; then
     env \
       -u T3_ISSUE_WORKER_GITHUB_TOKEN \
       -u T3_ISSUE_WORKER_GITHUB_TOKEN_FILE \
-      -u LUMO_API_KEY \
       -u T3_SANDBOX_TOKEN \
       -u T3_SANDBOX_TOKEN_FILE \
       npm install --prefix "$OPENCODE_CONFIG_DIR" --omit=dev --no-audit --no-fund

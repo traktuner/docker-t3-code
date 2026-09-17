@@ -33,8 +33,8 @@ export function injectPolicyLine(line, policy, injectedSessions) {
   return JSON.stringify(message);
 }
 
-export function combinePolicies(stePolicy, sandboxPolicy) {
-  return [stePolicy, sandboxPolicy]
+export function combinePolicies(genericPolicy, sandboxPolicy) {
+  return [genericPolicy, sandboxPolicy]
     .map((policy) => (policy || "").trim())
     .filter(Boolean)
     .join("\n\n");
@@ -68,10 +68,10 @@ class JsonLinePolicyTransform extends Transform {
 }
 
 export function readPolicy(environment) {
-  const stePolicyPath =
-    environment.T3_STE100_POLICY_FILE ||
-    "/opt/t3-docker/agent-assets/policies/asd-ste100-mandatory.md";
-  const stePolicy = fs.readFileSync(stePolicyPath, "utf8");
+  const genericPolicyPath = (environment.T3_CURSOR_POLICY_FILE || "").trim();
+  const genericPolicy = genericPolicyPath
+    ? fs.readFileSync(genericPolicyPath, "utf8")
+    : "";
   const sandboxActive =
     Boolean((environment.T3_SANDBOX_URL || "").trim()) &&
     truthy(
@@ -86,7 +86,7 @@ export function readPolicy(environment) {
       "/opt/t3-docker/t3-sandbox-instructions.md";
     sandboxPolicy = fs.readFileSync(sandboxPolicyPath, "utf8");
   }
-  return combinePolicies(stePolicy, sandboxPolicy);
+  return combinePolicies(genericPolicy, sandboxPolicy);
 }
 
 function run() {

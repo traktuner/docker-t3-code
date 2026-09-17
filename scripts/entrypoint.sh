@@ -338,19 +338,6 @@ provision_provider_config_dirs() {
   provision_optional_config_dir "Codex" "$codex_source" "${CODEX_HOME:-/data/codex}" "${T3_PROVIDER_CODEX:-1}"
   provision_optional_config_dir "Claude" "$claude_source" "${T3_CLAUDE_HOME_PATH:-/data/claude-home}/.claude" "${T3_PROVIDER_CLAUDE:-1}"
   provision_optional_config_dir "Grok" "$grok_source" "${GROK_CONFIG_DIR:-$HOME/.grok}" "${T3_PROVIDER_GROK:-1}"
-  python3 /opt/t3-docker/provision-harness-instructions.py
-}
-
-provision_ste100_policy() {
-  python3 /opt/t3-docker/provision-ste100-policy.py --scope container
-}
-
-provision_promo_video_skill() {
-  python3 /opt/t3-docker/provision-promo-video-skill.py --scope container
-}
-
-provision_generic_skills() {
-  python3 /opt/t3-docker/provision-generic-skills.py --scope container
 }
 
 install_npm_latest() {
@@ -580,9 +567,6 @@ run_t3_headless() {
 configure_github_git_credential_helper
 hydrate_github_auth_for_opencode
 provision_provider_config_dirs
-provision_ste100_policy
-provision_promo_video_skill
-provision_generic_skills
 if [[ "${T3_AUTO_UPDATE_EFFECTIVE:-1}" == "1" ]]; then
   install_npm_latest "${T3_UPDATE_CODEX:-0}" "@openai/codex" "Codex CLI" "codex"
   install_npm_latest "${T3_UPDATE_CLAUDE:-0}" "@anthropic-ai/claude-code" "Claude Code" "claude" "install.cjs"
@@ -591,65 +575,12 @@ if [[ "${T3_AUTO_UPDATE_EFFECTIVE:-1}" == "1" ]]; then
   install_grok_latest "${T3_UPDATE_GROK:-0}"
 fi
 
-cleanup_stale_git_locks() {
-  local workspace="${T3_WORKDIR:-/workspace}"
-  local max_depth="${T3_GIT_REPOSITORY_SCAN_DEPTH:-8}"
-  local git_marker repository stash_ref stash_sha ts
-
-  [[ -d "$workspace" ]] || return 0
-  [[ "$max_depth" =~ ^[1-9][0-9]*$ ]] || {
-    echo "T3_GIT_REPOSITORY_SCAN_DEPTH must be a positive integer." >&2
-    exit 1
-  }
-
-  while IFS= read -r -d '' git_marker; do
-    repository="$(dirname "$git_marker")"
-
-    # Remove stale lock files older than 1 day (common on NFS mounts).
-    while IFS= read -r -d '' lock_file; do
-      rm -f "$lock_file" && echo "Removed stale Git lock: $lock_file"
-    done < <(
-      find "$repository/.git" \( -name "*.lock" \) -type f -mtime +1 -print0 2>/dev/null
-    )
-
-    # Move corrupt stash refs that point to missing Git objects.
-    stash_ref="$repository/.git/refs/stash"
-    if [[ -f "$stash_ref" ]]; then
-      stash_sha="$(head -c 40 "$stash_ref" 2>/dev/null)"
-      if [[ "$stash_sha" =~ ^[0-9a-f]{40}$ ]] && ! git -C "$repository" cat-file -e "$stash_sha" 2>/dev/null; then
-        ts="$(date +%Y%m%d%H%M%S)"
-        mv "$stash_ref" "${stash_ref}.corrupt.${ts}" 2>/dev/null && \
-          echo "Moved corrupt stash ref in: $repository"
-        [[ -f "$repository/.git/logs/refs/stash" ]] && \
-          mv "$repository/.git/logs/refs/stash" \
-             "$repository/.git/logs/refs/stash.corrupt.${ts}" 2>/dev/null
-        git -C "$repository" reflog expire --expire=now --all 2>/dev/null \
-          || echo "Warning: reflog expire failed for: $repository" >&2
-        git -C "$repository" gc --prune=now 2>/dev/null \
-          || echo "Warning: git gc failed for: $repository" >&2
-      fi
-    fi
-  done < <(
-    find "$workspace" -xdev -mindepth 1 -maxdepth "$max_depth" \
-      \( -type d -o -type f \) -name .git -print0 2>/dev/null
-  )
-}
+/opt/t3-docker/run-config-bootstrap.sh container
 
 if ! /opt/t3-docker/provision-harness-mcp.sh; then
   echo "Warning: failed to provision one or more harness MCP registrations." >&2
 fi
 
-# agent-rack resolves its configuration from HOME-based default paths, and some
-# harnesses (claude) are spawned with a different HOME. Export the exact path
-# globally before any harness process starts so every client resolves the same
-# shared configuration.
-export AGENT_RACK_CONFIG="${AGENT_RACK_CONFIG:-${XDG_CONFIG_HOME:-$HOME/.config}/agent-rack/config.json}"
-if ! /opt/t3-docker/provision-agent-rack.sh; then
-  echo "Error: failed to provision required agent-rack harness controls." >&2
-  exit 1
-fi
-
-cleanup_stale_git_locks
 configure_git_safe_directories
 
 start_managed_opencode_server

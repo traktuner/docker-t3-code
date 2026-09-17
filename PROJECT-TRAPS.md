@@ -81,3 +81,19 @@
   (`scripts/provision-agent-rack.sh`, `scripts/entrypoint.sh`).
 
 - Deploy all three Infra-owned agent-rack reliability assets before startup and retain write ownership only for the four patched installed JS files. The runtime patch must fail closed if assets or version anchors differ. Claude workers need `/data/claude-home`; Onyx requires explicit `ONYX_TOKEN` inheritance because stock environment sanitization removes it (`Dockerfile`, `scripts/provision-agent-rack.sh`, canonical `agent-rack-worker-capabilities.mjs`).
+- Do not treat the image-only CI probe as proof of the public default startup.
+  CI explicitly sets `T3_AGENT_RACK=0`, but the provisioner defaults to enabled
+  and requires Infra-owned patch assets absent from the basic Compose setup.
+  Test a fresh default installation separately. Preserve mandatory patch checks
+  for the configured Infra profile when introducing a neutral public default
+  (`scripts/provision-agent-rack.sh`, `scripts/entrypoint.sh`,
+  `.github/workflows/container.yml`, `docker-compose.yml`).
+
+- Do not reclassify a generic-skill provisioning error from the target's final
+  node type. Only a dedicated missing-manifest error for an allowlisted real
+  directory is skippable. Keep ownership outside the skill directory so a
+  deleted manifest remains fatal, and validate every resolved parent before
+  applying that exception (`scripts/provision-generic-skills.py`).
+
+- Keep operator bootstrap optional and run it before the final generic MCP reconciliation and before harness startup. A config-replacing bootstrap can erase earlier MCP registrations. Issue-worker bootstrap mode must skip legacy `rsync --delete` and dependency installation, which otherwise erase Infra management state (`scripts/entrypoint.sh`, `scripts/issue-worker-entrypoint.sh`, `tests/config-bootstrap.test.mjs`).
+- Treat the personal skill/provisioner entries above as historical migration evidence. Their active contract now belongs to Infra's `harness/` and `scripts/harness-bundle.py`; do not restore personal assets or mandatory Infra patches to this public image. Bootstrap-unset CI must test the actual generic startup without disabling agent-rack through a legacy flag (`Dockerfile`, `.github/workflows/container.yml`).

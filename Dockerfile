@@ -4,8 +4,8 @@ FROM node:26-bookworm-slim
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
-ARG MCP_SDK_VERSION=1.29.0
-ARG ZOD_VERSION=4.4.3
+ARG MCP_SDK_VERSION=1.31.0
+ARG ZOD_VERSION=4.6.5
 ARG NPM_VERSION=latest
 ARG PNPM_VERSION=latest
 ARG YARN_VERSION=latest

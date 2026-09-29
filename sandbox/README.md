@@ -184,8 +184,8 @@ Important gateway variables:
 | `T3_SANDBOX_RUNTIME_NETWORK` | `t3-sandbox-runtime` | Private Docker network used by workers |
 | `T3_SANDBOX_DOCKER_NETWORK_MODE` | runtime network | Optional worker network-mode override |
 | `T3_SANDBOX_PORT_RANGE_MIN/MAX` | `40000`/`40200` | Worker endpoint allocation range |
-| `T3_SANDBOX_EXECD_IMAGE` | `opensandbox/execd:v1.0.20` | OpenSandbox command sidecar |
-| `T3_SANDBOX_EGRESS_IMAGE` | `opensandbox/egress:v1.1.3` | Optional policy sidecar |
+| `T3_SANDBOX_EXECD_IMAGE` | `opensandbox/execd:release-1.1.0` | OpenSandbox command sidecar |
+| `T3_SANDBOX_EGRESS_IMAGE` | `opensandbox/egress:release-1.1.0` | Optional policy sidecar |
 | `T3_SANDBOX_SECURE_RUNTIME` | empty | Optional `gvisor` or `kata` runtime |
 | `T3_SANDBOX_DOCKER_RUNTIME` | inferred | Docker runtime name for secure mode |
 

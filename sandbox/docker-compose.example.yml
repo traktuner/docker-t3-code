@@ -1,6 +1,6 @@
 services:
   opensandbox:
-    image: opensandbox/server:v0.2.1
+    image: opensandbox/server:release-1.1.0
     restart: unless-stopped
     environment:
       T3_SANDBOX_HEALTH_GRACE_SECONDS: ${T3_SANDBOX_HEALTH_GRACE_SECONDS:-600}
@@ -54,8 +54,8 @@ services:
       T3_SANDBOX_PIDS_LIMIT: ${T3_SANDBOX_PIDS_LIMIT:-4096}
       T3_SANDBOX_APPARMOR_PROFILE: ${T3_SANDBOX_APPARMOR_PROFILE:-}
       T3_SANDBOX_SECCOMP_PROFILE: ${T3_SANDBOX_SECCOMP_PROFILE:-}
-      T3_SANDBOX_EXECD_IMAGE: ${T3_SANDBOX_EXECD_IMAGE:-opensandbox/execd:v1.0.20}
-      T3_SANDBOX_EGRESS_IMAGE: ${T3_SANDBOX_EGRESS_IMAGE:-opensandbox/egress:v1.1.3}
+      T3_SANDBOX_EXECD_IMAGE: ${T3_SANDBOX_EXECD_IMAGE:-opensandbox/execd:release-1.1.0}
+      T3_SANDBOX_EGRESS_IMAGE: ${T3_SANDBOX_EGRESS_IMAGE:-opensandbox/egress:release-1.1.0}
       T3_SANDBOX_EGRESS_MODE: ${T3_SANDBOX_EGRESS_MODE:-dns}
       T3_SANDBOX_DOCKER_HOST_IP: ${T3_SANDBOX_DOCKER_HOST_IP:-host.docker.internal}
       T3_SANDBOX_SECURE_RUNTIME: ${T3_SANDBOX_SECURE_RUNTIME:-}

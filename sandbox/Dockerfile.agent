@@ -1,8 +1,8 @@
 # syntax=docker/dockerfile:1.7
 
 ARG UV_VERSION=latest
-FROM golang:1.26.5-bookworm AS go-toolchain
-FROM rust:1.96.1-slim-bookworm AS rust-toolchain
+FROM golang:1.27.1-bookworm AS go-toolchain
+FROM rust:1.98.1-slim-bookworm AS rust-toolchain
 FROM ghcr.io/astral-sh/uv:${UV_VERSION} AS uv-toolchain
 
 FROM node:26-bookworm

@@ -89,7 +89,9 @@ def main() -> None:
 
     replacements = {
         "@@MAX_TTL_SECONDS@@": str(integer("T3_SANDBOX_MAX_TTL_SECONDS", 28800, 60)),
-        "@@EXECD_IMAGE@@": json.dumps(text("T3_SANDBOX_EXECD_IMAGE", "opensandbox/execd:v1.0.20")),
+        "@@EXECD_IMAGE@@": json.dumps(
+            text("T3_SANDBOX_EXECD_IMAGE", "opensandbox/execd:release-1.1.0")
+        ),
         "@@ALLOWED_HOST_PATHS@@": ", ".join(
             json.dumps(path) for path in allowed_host_paths
         ),
@@ -105,7 +107,7 @@ def main() -> None:
             os.environ.get("T3_SANDBOX_SECCOMP_PROFILE", "").strip()
         ),
         "@@EGRESS_IMAGE@@": json.dumps(
-            text("T3_SANDBOX_EGRESS_IMAGE", "opensandbox/egress:v1.1.3")
+            text("T3_SANDBOX_EGRESS_IMAGE", "opensandbox/egress:release-1.1.0")
         ),
         "@@EGRESS_MODE@@": json.dumps(egress_mode),
         "@@SECURE_RUNTIME_CONFIG@@": secure_runtime_config(),

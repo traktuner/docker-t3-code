@@ -32,7 +32,9 @@ permissions:
 
 concurrency:
   group: container-${{ github.ref }}
-  cancel-in-progress: true
+  # A delayed daily schedule must not cancel a running push/dispatch build;
+  # the schedule gate usually skips, which would leave no image published.
+  cancel-in-progress: ${{ github.event_name != 'schedule' }}
 
 env:
   REGISTRY: ghcr.io

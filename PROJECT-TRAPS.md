@@ -97,3 +97,10 @@
 
 - Keep operator bootstrap optional and run it before the final generic MCP reconciliation and before harness startup. A config-replacing bootstrap can erase earlier MCP registrations. Issue-worker bootstrap mode must skip legacy `rsync --delete` and dependency installation, which otherwise erase Infra management state (`scripts/entrypoint.sh`, `scripts/issue-worker-entrypoint.sh`, `tests/config-bootstrap.test.mjs`).
 - Treat the personal skill/provisioner entries above as historical migration evidence. Their active contract now belongs to Infra's `harness/` and `scripts/harness-bundle.py`; do not restore personal assets or mandatory Infra patches to this public image. Bootstrap-unset CI must test the actual generic startup without disabling agent-rack through a legacy flag (`Dockerfile`, `.github/workflows/container.yml`).
+
+- Do not let the daily `schedule` event cancel an in-progress push or dispatch
+  build. GitHub can start the 03:24 UTC cron hours late; with an unconditional
+  `cancel-in-progress: true` it cancelled push run 36547988541 after 43 minutes
+  of building, and the schedule gate then skipped because T3 0.0.42 was already
+  published, so no image was released. Keep `cancel-in-progress` false for
+  `schedule` events (`.github/workflows/container.yml`).
